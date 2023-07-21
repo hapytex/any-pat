@@ -1,8 +1,10 @@
+{-# LANGUAGE TemplateHaskellQuotes #-}
+
 module Data.Pattern.Any (allPats, patVars) where
 
 import Data.List(sort)
 import Data.List.NonEmpty(NonEmpty((:|)))
-import Language.Haskell.TH(Name, Pat(LitP, VarP, TupP, UnboxedTupP, UnboxedSumP, ConP, InfixP, UInfixP, ParensP, TildeP, BangP, AsP, WildP, RecP, ListP, SigP, ViewP))
+import Language.Haskell.TH(Body(NormalB), Exp(AppE, ConE, LamCaseE, TupE, VarE), Match(Match), Name, Pat(LitP, VarP, TupP, UnboxedTupP, UnboxedSumP, ConP, InfixP, UInfixP, ParensP, TildeP, BangP, AsP, WildP, RecP, ListP, SigP, ViewP))
 
 patVars :: Pat -> [Name]
 patVars = (`go` [])
@@ -32,6 +34,7 @@ allPats (x :| xs)
   where p0 = go x
         go = sort . patVars
 
--- unionFunc :: [Pat] -> Exp
--- unionFunc a
-
+unionCaseFunc :: [Pat] -> (Exp, Pat)
+unionCaseFunc ps@(p0:ps')
+  | Just ns <- allPats (p0 :| ps') = let b = NormalB (ConE 'Just `AppE` TupE (map (Just . VarE) ns)) in LamCaseE (map (\p -> Match p b []) ps ++ [Match WildP (NormalB (ConE 'Nothing)) []])
+  | otherwise = undefined

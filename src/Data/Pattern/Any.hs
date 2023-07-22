@@ -5,6 +5,8 @@ module Data.Pattern.Any (allPats, patVars) where
 import Data.List(sort)
 import Data.List.NonEmpty(NonEmpty((:|)))
 import Language.Haskell.TH(Body(NormalB), Exp(AppE, ConE, LamCaseE, TupE, VarE), Match(Match), Name, Pat(LitP, VarP, TupP, UnboxedTupP, UnboxedSumP, ConP, InfixP, UInfixP, ParensP, TildeP, BangP, AsP, WildP, RecP, ListP, SigP, ViewP))
+import qualified Language.Haskell.Exts.Syntax as S
+import Language.Haskell.Meta (toPat)
 
 patVars :: Pat -> [Name]
 patVars = (`go` [])
@@ -36,5 +38,32 @@ allPats (x :| xs)
 
 unionCaseFunc :: [Pat] -> (Exp, Pat)
 unionCaseFunc ps@(p0:ps')
-  | Just ns <- allPats (p0 :| ps') = let b = NormalB (ConE 'Just `AppE` TupE (map (Just . VarE) ns)) in LamCaseE (map (\p -> Match p b []) ps ++ [Match WildP (NormalB (ConE 'Nothing)) []])
+  | Just ns <- allPats (p0 :| ps') = let b = NormalB (ConE 'Just `AppE` TupE (map (Just . VarE) ns)) in (LamCaseE (map (\p -> Match p b []) ps ++ [Match WildP (NormalB (ConE 'Nothing)) []]), p0)
   | otherwise = undefined
+
+{-
+nameToName :: S.Name a -> Name
+nameToName (S.Ident _ n) = mkName n
+nameToName (S.Symbol _ n) = mkName n
+
+patToPat :: S.Pat a -> Pat
+patToPat (S.PVar _ n) = VarP (nameToName n)
+patToPat (S.PLit _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+patToPat (S. _) =
+-}

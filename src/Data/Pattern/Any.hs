@@ -1,9 +1,11 @@
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP #-}
 
 module Data.Pattern.Any (allPats, patVars, sortedUnion, anypat, maypat) where
 
 import Control.Arrow (first)
+import Control.Monad((>=>))
 import Control.Monad.Fail (MonadFail)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -12,32 +14,46 @@ import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parsePa
 import Language.Haskell.Exts.SrcLoc (SrcLoc (SrcLoc))
 import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Meta (toPat)
-import Language.Haskell.TH (Body (NormalB), Exp (AppE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP))
+import Language.Haskell.TH (Body (NormalB), Exp (AppE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q)
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
 
+patVars' :: Pat -> [Name] -> [Name]
+patVars' (LitP _) = id
+patVars' (VarP n) = (n :)
+patVars' (TupP ps) = patVarsF ps
+patVars' (UnboxedTupP ps) = patVarsF ps
+patVars' (UnboxedSumP p _ _) = patVars' p
+patVars' (InfixP p1 _ p2) = patVars' p1 . patVars' p2
+patVars' (UInfixP p1 _ p2) = patVars' p1 . patVars' p2
+patVars' (ParensP p) = patVars' p
+patVars' (TildeP p) = patVars' p
+patVars' (BangP p) = patVars' p
+patVars' (AsP n p) = (n :) . patVars' p
+patVars' WildP = id
+patVars' (RecP _ ps) = patVarsF (map snd ps)
+patVars' (ListP ps) = patVarsF ps
+patVars' (SigP p _) = patVars' p
+patVars' (ViewP _ p) = patVars' p
+patVars' x = patVarsExtra' x
+
+
+#if MIN_VERSION_template_haskell(2,18,0)
+patVarsExtra' :: Pat -> [Name] -> [Name]
+patVarsExtra' (ConP _ _ ps) = patVarsF ps
+patVarsExtra' _ = id
+#else
+patVarsExtra' :: Pat -> [Name] -> [Name]
+patVarsExtra' (ConP _ ps) = patVarsF ps
+patVarsExtra' _ = id
+#endif
+
+patVarsF :: [Pat] -> [Name] -> [Name]
+patVarsF = foldr ((.) . patVars') id
+
 patVars :: Pat -> [Name]
-patVars = (`go` [])
-  where
-    go (LitP _) = id
-    go (VarP n) = (n :)
-    go (TupP ps) = go' ps
-    go (UnboxedTupP ps) = go' ps
-    go (UnboxedSumP p _ _) = go p
-    go (ConP _ _ ps) = go' ps
-    go (InfixP p1 _ p2) = go p1 . go p2
-    go (UInfixP p1 _ p2) = go p1 . go p2
-    go (ParensP p) = go p
-    go (TildeP p) = go p
-    go (BangP p) = go p
-    go (AsP n p) = (n :) . go p
-    go WildP = id
-    go (RecP _ ps) = go' (map snd ps)
-    go (ListP ps) = go' ps
-    go (SigP p _) = go p
-    go (ViewP _ p) = go p
-    go' = foldr ((.) . go) id
+patVars = (`patVars'` [])
 
 allPats :: NonEmpty Pat -> Maybe [Name]
 allPats (x :| xs)
@@ -123,8 +139,8 @@ liftFail :: MonadFail m => ParseResult a -> m a
 liftFail (ParseOk x) = pure x
 liftFail (ParseFailed _ s) = fail s
 
-failQ :: Q a
-failQ = fail "The QuasiQuoter can only work to generate code as pattern."
+failQ :: a -> Q b
+failQ = const (fail "The QuasiQuoter can only work to generate code as pattern.")
 
 anypat :: QuasiQuoter
 anypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ

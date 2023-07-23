@@ -6,13 +6,13 @@ module Data.Pattern.Any (allPats, patVars, sortedUnion, anypat, maypat) where
 
 import Control.Arrow (first)
 import Control.Monad((>=>))
-import Control.Monad.Fail (MonadFail)
+# if !MIN_VERSION_base(4,13,0)
+import Control.Monad.Fail (MonadFail, fail)
+#endif
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Debug.Trace (traceShow)
 import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parsePat)
 import Language.Haskell.Exts.SrcLoc (SrcLoc (SrcLoc))
-import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Meta (toPat)
 import Language.Haskell.TH (Body (NormalB), Exp (AppE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q)
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))

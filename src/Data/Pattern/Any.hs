@@ -92,10 +92,18 @@ transName' AsJust = AppE (ConE 'Just) . VarE
 transName :: (HowPass, Name) -> Exp
 transName = uncurry transName'
 
+#if MIN_VERSION_template_haskell(2, 16, 0)
+_transName :: (HowPass, Name) -> Maybe Exp
+_transName = Just . transName
+#else
+_transName :: (HowPass, Name) -> Exp
+_transName = transName
+#endif
+
 bodyExp :: [(HowPass, Name)] -> Exp
 bodyExp [] = ConE 'True
 bodyExp [n] = ConE 'Just `AppE` transName n
-bodyExp ns = ConE 'Just `AppE` TupE (map (Just . transName) ns)
+bodyExp ns = ConE 'Just `AppE` TupE (map _transName ns)
 
 unionCaseFunc' :: [Pat] -> [Name] -> [[(HowPass, Name)]] -> (Exp, Pat)
 unionCaseFunc' ps ns ns' = (LamCaseE (zipWith (\p' n -> Match p' (NormalB (bodyExp n)) []) ps ns' ++ [Match WildP bf []]), p)

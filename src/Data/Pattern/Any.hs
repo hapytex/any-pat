@@ -79,10 +79,18 @@ unionPats (x :| xs) = (un, un')
     un = foldr (sortedUnion False False (&&) . go') (go' n0) ns
     un' = map (sortedUnion False False howPass un . map (True,)) (n0 : ns)
 
+#if MIN_VERSION_template_haskell(2,18,0)
+conP :: Name -> [Pat] -> Pat
+conP = (`ConP` [])
+#else
+conP :: Name -> [Pat] -> Pat
+conP = ConP
+#endif
+
 bodyPat :: [Name] -> (Exp, Pat)
-bodyPat [] = (ConE 'False, ConP 'True [] [])
-bodyPat [n] = (ConE 'Nothing, ConP 'Just [] [VarP n])
-bodyPat ns = (ConE 'Nothing, ConP 'Just [] [TildeP (TupP (map VarP ns))])
+bodyPat [] = (ConE 'False, conP 'True [] [])
+bodyPat [n] = (ConE 'Nothing, conP 'Just [] [VarP n])
+bodyPat ns = (ConE 'Nothing, conP 'Just [] [TildeP (TupP (map VarP ns))])
 
 transName' :: HowPass -> Name -> Exp
 transName' Simple = VarE

@@ -2,7 +2,18 @@
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TupleSections #-}
 
-module Data.Pattern.Any (allPats, patVars, sortedUnion, anypat, maypat) where
+-- |
+-- Module      : Data.Pattern.Any
+-- Description : A module to work with a 'QuasiQuoter' to use different patterns in the head same function clause.
+-- Maintainer  : hapytexeu+gh@gmail.com
+-- Stability   : experimental
+-- Portability : POSIX
+--
+-- The module exposes two 'QuasiQuoter's named 'anypat' and 'maypat' that allow compiling separate patterns into a single (view) pattern that
+-- will fire in case any of the patterns matches. If there are any variable names, it will match these. For the 'anypat' it requires that all
+-- variables occur in all patterns. For 'maypat' that is not a requirement. For both 'QuasiQuoter's, it is however required that the variables
+-- have the same type in each pattern.
+module Data.Pattern.Any (patVars, patVars', anypat, maypat) where
 
 import Control.Arrow (first)
 import Control.Monad ((>=>))
@@ -19,7 +30,11 @@ import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
 
-patVars' :: Pat -> [Name] -> [Name]
+-- | Provides a list of variable names for a given 'Pat'tern. The list is /not/ sorted. If the same variable name occurs multiple times (which does not make much sense), it will be listed multiple times.
+patVars'
+  :: Pat  -- ^ The 'Pat'tern to inspect.
+  -> [Name]  -- ^ The list of remaining elements that is added as tail.
+  -> [Name]  -- ^ The list of variable names that is used to collect (fragments) of the pattern.
 patVars' (LitP _) = id
 patVars' (VarP n) = (n :)
 patVars' (TupP ps) = patVarsF ps
@@ -51,16 +66,11 @@ patVarsExtra' _ = id
 patVarsF :: [Pat] -> [Name] -> [Name]
 patVarsF = foldr ((.) . patVars') id
 
-patVars :: Pat -> [Name]
+-- | Provides a list of variable names for a given 'Pat'tern. The list is /not/ sorted. If the same variable name occurs multiple times (which does not make much sense), it will be listed multiple times.
+patVars
+  :: Pat  -- ^ The 'Pat'tern to inspect.
+  -> [Name]  -- ^ The list of variable names that is used to collect (fragments) of the pattern.
 patVars = (`patVars'` [])
-
-allPats :: NonEmpty Pat -> Maybe [Name]
-allPats (x :| xs)
-  | all ((p0 ==) . go) xs = Just p0
-  | otherwise = Nothing
-  where
-    p0 = go x
-    go = sort . patVars
 
 howPass :: Bool -> Bool -> HowPass
 howPass False True = AsJust
@@ -159,8 +169,13 @@ liftFail (ParseFailed _ s) = fail s
 failQ :: a -> Q b
 failQ = const (fail "The QuasiQuoter can only work to generate code as pattern.")
 
-anypat :: QuasiQuoter
+-- | A quasquoter to specify multiple patterns that will succeed if any of the patterns match. All patterns should have the same set of variables and these should
+-- have the same type, otherwise a variable would have two different types, and if a variable is absent in one of the patterns, the question is what to pass as value.
+anypat :: QuasiQuoter  -- ^ The quasiquoter that can be used as pattern.
 anypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ
 
-maypat :: QuasiQuoter
+-- | A quasiquoter to specify multiple patterns that will succeed if any of these patterns match. Patterns don't have to have the same variable names but if a variable is shared over the
+-- different patterns, it should have the same type. In case a variable name does not appear in all patterns, it will be passed as a 'Maybe' to the clause with 'Nothing' if a pattern matched
+-- without that variable name, and a 'Just' if the (first) pattern that matched had such variable.
+maypat :: QuasiQuoter  -- ^ The quasiquoter that can be used as pattern.
 maypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ

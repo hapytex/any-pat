@@ -75,5 +75,5 @@ liftFail :: MonadFail m => ParseResult a -> m a
 liftFail (ParseOk x) = pure x
 liftFail (ParseFailed _ s) = fail s
 
-anyPattern :: QuasiQuoter
-anyPattern = QuasiQuoter undefined (fmap unionCaseFunc . liftFail . parsePatternSequence) undefined undefined
+anyqq :: QuasiQuoter
+anyqq = QuasiQuoter undefined (fmap unionCaseFunc . liftFail . parsePatternSequence) undefined undefined

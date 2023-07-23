@@ -141,7 +141,7 @@ unionCaseFunc chk ps@(p0 :| ps')
 parsePatternSequence' :: (Pat -> b) -> (Pat -> a -> b) -> (String -> ParseResult a) -> String -> ParseResult b
 parsePatternSequence' zer cmb rec s = case go s of
   p@(ParseFailed (SrcLoc _ _ n) _) -> case splitAt (n-1) s of
-                                        (xs, (_ : ys)) -> cmb <$> go xs <*> rec ys
+                                        (xs, _ : ys) -> cmb <$> go xs <*> rec ys
                                         _ -> zer <$> p
   ParseOk p -> pure (zer p)
   where

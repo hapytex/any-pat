@@ -7,7 +7,7 @@ module Data.Pattern.Any (allPats, patVars, sortedUnion, anypat, maypat) where
 import Control.Arrow (first)
 import Control.Monad((>=>))
 # if !MIN_VERSION_base(4,13,0)
-import Control.Monad.Fail (MonadFail, fail)
+import Control.Monad.Fail (MonadFail)
 #endif
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))

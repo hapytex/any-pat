@@ -88,9 +88,9 @@ conP = ConP
 #endif
 
 bodyPat :: [Name] -> (Exp, Pat)
-bodyPat [] = (ConE 'False, conP 'True [] [])
-bodyPat [n] = (ConE 'Nothing, conP 'Just [] [VarP n])
-bodyPat ns = (ConE 'Nothing, conP 'Just [] [TildeP (TupP (map VarP ns))])
+bodyPat [] = (ConE 'False, conP 'True [])
+bodyPat [n] = (ConE 'Nothing, conP 'Just [VarP n])
+bodyPat ns = (ConE 'Nothing, conP 'Just [TildeP (TupP (map VarP ns))])
 
 transName' :: HowPass -> Name -> Exp
 transName' Simple = VarE

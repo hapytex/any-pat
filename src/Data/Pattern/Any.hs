@@ -40,9 +40,16 @@ allPats (x :| xs)
   where p0 = go x
         go = sort . patVars
 
+bodyPat :: [Name] -> (Exp, Exp, Pat)
+bodyPat [] = (ConE 'True, ConE 'False, ConP 'True [] [])
+bodyPat [n] = (ConE 'Just `AppE` VarE n, ConE 'Nothing, ConP 'Just [] [VarP n])
+bodyPat ns = (ConE 'Just `AppE` TupE (map (Just . VarE) ns), ConE 'Nothing, ConP 'Just [] [TildeP (TupP (map VarP ns))])
+
 unionCaseFunc' :: [Pat] -> [Name] -> (Exp, Pat)
-unionCaseFunc' ps ns = (LamCaseE (map (\p -> Match p b []) ps ++ [Match WildP (NormalB (ConE 'Nothing)) []]), ConP 'Just [] [TildeP (TupP (map VarP ns))])
-  where b = NormalB (ConE 'Just `AppE` TupE (map (Just . VarE) ns))
+unionCaseFunc' ps ns = (LamCaseE (map (\p -> Match p b0 []) ps ++ [Match WildP b1 []]), p)
+  where ~(e0, e1, p) = bodyPat ns
+        b0 = NormalB e0
+        b1 = NormalB e1
 
 
 unionCaseFunc :: NonEmpty Pat -> Pat

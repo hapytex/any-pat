@@ -1,0 +1,130 @@
+name: CI/CD
+on: push
+
+jobs:
+  linux1:
+    strategy:
+      matrix:
+        resolver: [lts-10, lts-11, lts-12, lts-13, lts-14, lts-15, lts-16, lts-17, lts-18, lts-19, lts-20, lts-21]
+    name: Build the Haskell software
+    runs-on: ubuntu-latest
+    steps:
+    - name: set up Haskell environment
+      uses: hapytex/github-actions/actions/setup-haskell@master
+    - name: checkout code
+      uses: actions/checkout@v2.3.1
+    - name: build haskell project
+      uses: hapytex/github-actions/actions/build-haskell-project@master
+      with:
+        resolver: ${{ matrix.resolver }}
+
+
+  linux2:
+    strategy:
+      matrix:
+        resolver: [lts-10, lts-11, lts-12, lts-13, lts-14, lts-15, lts-16, lts-17, lts-18, lts-19, lts-20, lts-21]
+    name: Build the Haddock documentation
+    runs-on: ubuntu-latest
+    steps:
+    - name: set up Haskell environment
+      uses: hapytex/github-actions/actions/setup-haskell@master
+    - name: checkout code
+      uses: actions/checkout@v2.3.1
+    - name: make Haddock documentation
+      uses: hapytex/github-actions/actions/run-haddock@master
+      with:
+        resolver: ${{ matrix.resolver }}
+      id: haddock
+    - name: echo path
+      run: "echo '${{ steps.haddock.outputs.haddock-path }}'"
+
+  linux3:
+    name: Look for todos
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout code
+      uses: actions/checkout@v2.3.1
+    - name: look for todos
+      uses: hapytex/github-actions/actions/look-for-todos@master
+      with:
+        directory: src
+
+
+  linux4:
+    name: Check for hlint suggestions
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout code
+      uses: actions/checkout@v2.3.1
+    - name: look for todos
+      uses: hapytex/github-actions/actions/hlint@master
+      with:
+        directory: src
+
+  linux5:
+    name: Code formatter
+    runs-on: ubuntu-latest
+    steps:
+    - name: update package database
+      run: sudo apt-get update
+    - name: install required packages
+      run: sudo apt-get install ormolu
+    - name: checkout code
+      uses: actions/checkout@v2.3.1
+    - name: ormolu formatter
+      uses: hapytex/github-actions/actions/run-haskell-ormolu@master
+
+
+  linux6:
+    strategy:
+      matrix:
+        resolver: [lts-10, lts-11, lts-12, lts-13, lts-14, lts-15, lts-16, lts-17, lts-18, lts-19, lts-20, lts-21]
+    name: Run the tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: set up Haskell environment
+      uses: hapytex/github-actions/actions/setup-haskell@master
+    - name: checkout code
+      uses: actions/checkout@v2.3.1
+    - name: test the software with the given resolver
+      uses: hapytex/github-actions/actions/run-haskell-tests@master
+      with:
+        resolver: ${{ matrix.resolver }}
+
+  linux7:
+    name: Deploy documentation to GitHub pages
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
+    steps:
+    - uses: hapytex/github-actions/actions/setup-haskell@master
+    - name: checkout code
+      uses: actions/checkout@v2.3.1
+    - name: make Haddock documentation
+      uses: hapytex/github-actions/actions/run-haddock@master
+      id: haddock
+    - name: Add cname to the directory
+      uses: hapytex/github-actions/actions/add-cname-to-directory@master
+      with:
+        folder: "${{ steps.haddock.outputs.haddock-path }}"
+        cname: "any-pat.django-antipatterns.com"
+    - name: deploy the documentation on the GitHub pages
+      uses: JamesIves/github-pages-deploy-action@4.0.0
+      with:
+        branch: gh-pages
+        folder: "${{ steps.haddock.outputs.haddock-path }}"
+        single-commit: true
+
+  linux8:
+    name: Deploy package on hackage
+    runs-on: ubuntu-latest
+    needs: [linux1, linux2, linux3, linux4, linux5, linux6, linux7]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+    - uses: hapytex/github-actions/actions/setup-haskell@master
+    - name: checkout code
+      uses: actions/checkout@v2.3.1
+    - name: publish the package on Hackage
+      uses: hapytex/github-actions/actions/hackage-publish@master
+      with:
+        HACKAGE_USERNAME: "${{ secrets.HACKAGE_USERNAME }}"
+        HACKAGE_PASSWORD: "${{ secrets.HACKAGE_PASSWORD }}"

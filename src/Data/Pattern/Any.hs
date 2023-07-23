@@ -1,11 +1,11 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE CPP #-}
 
 module Data.Pattern.Any (allPats, patVars, sortedUnion, anypat, maypat) where
 
 import Control.Arrow (first)
-import Control.Monad((>=>))
+import Control.Monad ((>=>))
 # if !MIN_VERSION_base(4,13,0)
 import Control.Monad.Fail (MonadFail)
 #endif
@@ -37,7 +37,6 @@ patVars' (ListP ps) = patVarsF ps
 patVars' (SigP p _) = patVars' p
 patVars' (ViewP _ p) = patVars' p
 patVars' x = patVarsExtra' x
-
 
 #if MIN_VERSION_template_haskell(2,18,0)
 patVarsExtra' :: Pat -> [Name] -> [Name]
@@ -140,9 +139,9 @@ unionCaseFunc chk ps@(p0 :| ps')
 
 parsePatternSequence' :: (Pat -> b) -> (Pat -> a -> b) -> (String -> ParseResult a) -> String -> ParseResult b
 parsePatternSequence' zer cmb rec s = case go s of
-  p@(ParseFailed (SrcLoc _ _ n) _) -> case splitAt (n-1) s of
-                                        (xs, _ : ys) -> cmb <$> go xs <*> rec ys
-                                        _ -> zer <$> p
+  p@(ParseFailed (SrcLoc _ _ n) _) -> case splitAt (n - 1) s of
+    (xs, _ : ys) -> cmb <$> go xs <*> rec ys
+    _ -> zer <$> p
   ParseOk p -> pure (zer p)
   where
     go = fmap toPat . parsePat

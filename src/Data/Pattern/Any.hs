@@ -4,9 +4,13 @@ module Data.Pattern.Any (allPats, patVars) where
 
 import Data.List(sort)
 import Data.List.NonEmpty(NonEmpty((:|)))
+import Debug.Trace(traceShow)
 import Language.Haskell.TH(Body(NormalB), Exp(AppE, ConE, LamCaseE, TupE, VarE), Match(Match), Name, Pat(LitP, VarP, TupP, UnboxedTupP, UnboxedSumP, ConP, InfixP, UInfixP, ParensP, TildeP, BangP, AsP, WildP, RecP, ListP, SigP, ViewP))
 import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Meta (toPat)
+import Language.Haskell.Exts.Parser(ParseResult(ParseOk, ParseFailed), parsePat)
+import Language.Haskell.Exts.SrcLoc(SrcLoc(SrcLoc))
+import Language.Haskell.TH.Quote(QuasiQuoter(QuasiQuoter))
 
 patVars :: Pat -> [Name]
 patVars = (`go` [])
@@ -36,34 +40,33 @@ allPats (x :| xs)
   where p0 = go x
         go = sort . patVars
 
-unionCaseFunc :: [Pat] -> (Exp, Pat)
-unionCaseFunc ps@(p0:ps')
-  | Just ns <- allPats (p0 :| ps') = let b = NormalB (ConE 'Just `AppE` TupE (map (Just . VarE) ns)) in (LamCaseE (map (\p -> Match p b []) ps ++ [Match WildP (NormalB (ConE 'Nothing)) []]), p0)
+unionCaseFunc' :: [Pat] -> [Name] -> (Exp, Pat)
+unionCaseFunc' ps ns = (LamCaseE (map (\p -> Match p b []) ps ++ [Match WildP (NormalB (ConE 'Nothing)) []]), ConP 'Just [] [TildeP (TupP (map VarP ns))])
+  where b = NormalB (ConE 'Just `AppE` TupE (map (Just . VarE) ns))
+
+
+unionCaseFunc :: NonEmpty Pat -> Pat
+unionCaseFunc ps@(p0 :| ps')
+  | Just ns <- allPats ps = uncurry ViewP (unionCaseFunc' (p0 : ps') ns)
   | otherwise = undefined
 
-{-
-nameToName :: S.Name a -> Name
-nameToName (S.Ident _ n) = mkName n
-nameToName (S.Symbol _ n) = mkName n
+-- unionCaseFunc' :: [Pat] -> (Exp
 
-patToPat :: S.Pat a -> Pat
-patToPat (S.PVar _ n) = VarP (nameToName n)
-patToPat (S.PLit _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
-patToPat (S. _) =
--}
+parsePatternSequence' :: (Pat -> b) -> (Pat -> a -> b) -> (String -> ParseResult a) -> String -> ParseResult b
+parsePatternSequence' zer cmb rec s = case go s of
+    ParseFailed (SrcLoc _ _ n) _ -> let ~(xs, ~(_:ys)) = splitAt (n-1) s in cmb <$> go xs <*> rec ys
+    ParseOk p -> pure (zer p)
+  where go = fmap toPat . parsePat
+
+parsePatternSequence'' :: String -> ParseResult [Pat]
+parsePatternSequence'' = parsePatternSequence' pure (:) parsePatternSequence''
+
+parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
+parsePatternSequence = parsePatternSequence' (:| []) (:|) parsePatternSequence''
+
+liftFail :: MonadFail m => ParseResult a -> m a
+liftFail (ParseOk x) = pure x
+liftFail (ParseFailed _ s) = fail s
+
+anyPattern :: QuasiQuoter
+anyPattern = QuasiQuoter undefined (fmap unionCaseFunc . liftFail . parsePatternSequence) undefined undefined

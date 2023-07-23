@@ -123,8 +123,11 @@ liftFail :: MonadFail m => ParseResult a -> m a
 liftFail (ParseOk x) = pure x
 liftFail (ParseFailed _ s) = fail s
 
+failQ :: Q a
+failQ = fail "The QuasiQuoter can only work to generate code as pattern."
+
 anypat :: QuasiQuoter
-anypat = QuasiQuoter undefined ((liftFail >=> unionCaseFunc True) . parsePatternSequence) undefined undefined
+anypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ
 
 maypat :: QuasiQuoter
-maypat = QuasiQuoter undefined ((liftFail >=> unionCaseFunc False) . parsePatternSequence) undefined undefined
+maypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ

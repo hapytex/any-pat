@@ -9,3 +9,10 @@ and this project adheres to the
 ## Unreleased
 
 ## 0.1.0.0 - YYYY-MM-DD
+# `any-pat` changelog
+
+For a full list of changes, see the history on [*GitHub*](https://github.com/hapytex/any-pat).
+
+## Version 0.1.0.0
+
+

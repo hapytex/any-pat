@@ -100,10 +100,10 @@ conP :: Name -> [Pat] -> Pat
 conP = ConP
 #endif
 
-bodyPat :: [Name] -> (Exp, Pat)
-bodyPat [] = (ConE 'False, conP 'True [])
-bodyPat [n] = (ConE 'Nothing, conP 'Just [VarP n])
-bodyPat ns = (ConE 'Nothing, conP 'Just [TildeP (TupP (map VarP ns))])
+bodyPat :: Bool -> [Name] -> (Exp, Pat)
+bodyPat _ [] = (ConE 'False, conP 'True [])
+bodyPat b [n] = (ConE 'Nothing, wrapIt (conP 'Just . pure) b (VarP n))
+bodyPat b ns = (ConE 'Nothing, wrapIt (conP 'Just . pure) b (TildeP (TupP (map VarP ns))))
 
 transName' :: HowPass -> Name -> Exp
 transName' Simple = VarE
@@ -121,16 +121,22 @@ _transName :: (HowPass, Name) -> Exp
 _transName = transName
 #endif
 
-bodyExp :: [(HowPass, Name)] -> Exp
-bodyExp [] = ConE 'True
-bodyExp [n] = ConE 'Just `AppE` transName n
-bodyExp ns = ConE 'Just `AppE` TupE (map _transName ns)
+wrapIt :: (a -> a) -> Bool -> a -> a
+wrapIt f = go
+  where go False = id
+        go True = f
+
+bodyExp :: Bool -> [(HowPass, Name)] -> Exp
+bodyExp _ [] = ConE 'True
+bodyExp b [n] = wrapIt (ConE 'Just `AppE`) b (transName n)
+bodyExp b ns = wrapIt (ConE 'Just `AppE`) b (TupE (map _transName ns))
 
 unionCaseFunc' :: [Pat] -> [Name] -> [[(HowPass, Name)]] -> (Exp, Pat)
-unionCaseFunc' ps ns ns' = (LamCaseE (zipWith (\p' n -> Match p' (NormalB (bodyExp n)) []) ps ns' ++ [Match WildP bf []]), p)
+unionCaseFunc' ps ns ns' = (LamCaseE (zipWith (\p' n -> Match p' (NormalB (bodyExp partial n)) []) ps ns' ++ add), p)
   where
-    ~(ef, p) = bodyPat ns
-    bf = NormalB ef
+    ~(ef, p) = bodyPat partial ns
+    partial = WildP `notElem` ps  -- TODO: can be done in a more advanced manner
+    add = [Match WildP (NormalB ef) [] | partial]
 
 sortedUnion :: Ord a => b -> c -> (b -> c -> d) -> [(b, a)] -> [(c, a)] -> [(d, a)]
 sortedUnion v0 v1 f = go

@@ -123,8 +123,9 @@ _transName = transName
 
 wrapIt :: (a -> a) -> Bool -> a -> a
 wrapIt f = go
-  where go False = id
-        go True = f
+  where
+    go False = id
+    go True = f
 
 bodyExp :: Bool -> [(HowPass, Name)] -> Exp
 bodyExp _ [] = ConE 'True
@@ -135,7 +136,7 @@ unionCaseFunc' :: [Pat] -> [Name] -> [[(HowPass, Name)]] -> (Exp, Pat)
 unionCaseFunc' ps ns ns' = (LamCaseE (zipWith (\p' n -> Match p' (NormalB (bodyExp partial n)) []) ps ns' ++ add), p)
   where
     ~(ef, p) = bodyPat partial ns
-    partial = WildP `notElem` ps  -- TODO: can be done in a more advanced manner
+    partial = WildP `notElem` ps
     add = [Match WildP (NormalB ef) [] | partial]
 
 sortedUnion :: Ord a => b -> c -> (b -> c -> d) -> [(b, a)] -> [(c, a)] -> [(d, a)]
@@ -148,12 +149,18 @@ sortedUnion v0 v1 f = go
       LT -> (f b0 v1, x) : go xs ya
     go xs [] = map (first (`f` v1)) xs
 
-unionCaseFunc :: MonadFail m => Bool -> NonEmpty Pat -> m Pat
-unionCaseFunc chk ps@(p0 :| ps')
-  | not chk || all fst ns = pure (uncurry ViewP (unionCaseFunc' (p0 : ps') (map snd ns) ns'))
+unionCaseFuncWith :: MonadFail m => ((Exp, Pat) -> a) -> Bool -> NonEmpty Pat -> m a
+unionCaseFuncWith f chk ps@(p0 :| ps')
+  | not chk || all fst ns = pure (f (unionCaseFunc' (p0 : ps') (map snd ns) ns'))
   | otherwise = fail "Not all patterns have the same variable names"
   where
     (ns, ns') = unionPats ps
+
+unionCaseFunc :: MonadFail m => Bool -> NonEmpty Pat -> m Pat
+unionCaseFunc = unionCaseFuncWith (uncurry ViewP)
+
+unionCaseExp :: MonadFail m => Bool -> NonEmpty Pat -> m Exp
+unionCaseExp = unionCaseFuncWith fst
 
 #if MIN_VERSION_template_haskell(2,18,0)
 parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
@@ -190,7 +197,7 @@ failQ = const (fail "The QuasiQuoter can only work to generate code as pattern."
 anypat ::
   -- | The quasiquoter that can be used as pattern.
   QuasiQuoter
-anypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ
+anypat = QuasiQuoter ((liftFail >=> unionCaseExp True) . parsePatternSequence) ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ
 
 -- | A quasiquoter to specify multiple patterns that will succeed if any of these patterns match. Patterns don't have to have the same variable names but if a variable is shared over the
 -- different patterns, it should have the same type. In case a variable name does not appear in all patterns, it will be passed as a 'Maybe' to the clause with 'Nothing' if a pattern matched
@@ -198,4 +205,4 @@ anypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc True) . parsePatternSequ
 maypat ::
   -- | The quasiquoter that can be used as pattern.
   QuasiQuoter
-maypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
+maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ

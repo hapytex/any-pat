@@ -151,12 +151,13 @@ unionCaseFunc chk ps@(p0 :| ps')
 
 parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
 parsePatternSequence s = go (toPat <$> parsePat ('(' : s ++ ")"))
-  where go (ParseOk (ConP n [] [])) | n == '() = fail "no patterns specified"
-        go (ParseOk (ParensP p)) = pure (p :| [])
-        go (ParseOk (TupP [])) = fail "no patterns specified"
-        go (ParseOk (TupP (p : ps))) = pure (p :| ps)
-        go (ParseOk _) = fail "not a sequence of patterns"
-        go (ParseFailed l m) = ParseFailed l m
+  where
+    go (ParseOk (ConP n [] [])) | n == '() = fail "no patterns specified"
+    go (ParseOk (ParensP p)) = pure (p :| [])
+    go (ParseOk (TupP [])) = fail "no patterns specified"
+    go (ParseOk (TupP (p : ps))) = pure (p :| ps)
+    go (ParseOk _) = fail "not a sequence of patterns"
+    go (ParseFailed l m) = ParseFailed l m
 
 liftFail :: MonadFail m => ParseResult a -> m a
 liftFail (ParseOk x) = pure x

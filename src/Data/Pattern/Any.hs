@@ -23,7 +23,6 @@ import Control.Monad.Fail (MonadFail)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parsePat)
-import Language.Haskell.Exts.SrcLoc (SrcLoc (SrcLoc))
 import Language.Haskell.Meta (toPat)
 import Language.Haskell.TH (Body (NormalB), Exp (AppE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q)
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
@@ -150,22 +149,14 @@ unionCaseFunc chk ps@(p0 :| ps')
   where
     (ns, ns') = unionPats ps
 
--- unionCaseFunc' :: [Pat] -> (Exp
-
-parsePatternSequence' :: (Pat -> b) -> (Pat -> a -> b) -> (String -> ParseResult a) -> String -> ParseResult b
-parsePatternSequence' zer cmb rec s = case go s of
-  p@(ParseFailed (SrcLoc _ _ n) _) -> case splitAt (n - 1) s of
-    (xs, _ : ys) -> cmb <$> go xs <*> rec ys
-    _ -> zer <$> p
-  ParseOk p -> pure (zer p)
-  where
-    go = fmap toPat . parsePat
-
-parsePatternSequence'' :: String -> ParseResult [Pat]
-parsePatternSequence'' = parsePatternSequence' pure (:) parsePatternSequence''
-
 parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
-parsePatternSequence = parsePatternSequence' (:| []) (:|) parsePatternSequence''
+parsePatternSequence s = go (toPat <$> parsePat ('(' : s ++ ")"))
+  where go (ParseOk (ConP n [] [])) | n == '() = fail "no patterns specified"
+        go (ParseOk (ParensP p)) = pure (p :| [])
+        go (ParseOk (TupP [])) = fail "no patterns specified"
+        go (ParseOk (TupP (p : ps))) = pure (p :| ps)
+        go (ParseOk _) = fail "not a sequence of patterns"
+        go (ParseFailed l m) = ParseFailed l m
 
 liftFail :: MonadFail m => ParseResult a -> m a
 liftFail (ParseOk x) = pure x

@@ -75,7 +75,7 @@ The package transforms a sequence of patterns to a *view pattern*, or an *expres
   p<sub>2</sub> -&gt; Just n&#8407;
   &vellip;
   p<sub>n</sub> -&gt; Just n&#8407;
-  _ -&gt; Nothing<code></pre>
+  _ -&gt; Nothing</code></pre>
 
 with <code>n&#8407;</code> the (sorted) tuple of names found in the patterns. It then makes a view pattern <code>e -&gt; n&#8407;</code> that thus maps the found values for the variables to the names that can then be used in the body of the function.
 

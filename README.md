@@ -53,6 +53,15 @@ The difference between the two `QuasiQuoter`s (`anypat` and `maypat`) are the ha
 
 Therefore `maypat` comes with a different solution: it performs analysis on the variables used in the different patterns. Variables that occur in all patterns are just passed with the real value, variables that occur only in a (strict) subset of the listed patterns, are passed as a `Maybe a` value with `Just x` in case the first pattern that "fires" (left-to-right) for the value has that variable, it will be wrapped in a `Just`, and otherwise, it will pass `Nothing` as that variable.
 
+Some functions in the `base` package, for example, have a simple equivalent with `anypat` or `maypat`, for example [**`listToMaybe :: [a] -> Maybe a`**](https://hackage.haskell.org/package/base-4.18.0.0/docs/Data-Maybe.html#v:listToMaybe) can be implemented as:
+
+```
+{-# LANGUAGE QuasiQuotes #-}
+
+listToMaybe :: [a] -> Maybe a
+listToMaybe = [maypat|(a:_), _|]
+```
+
 ## Package structure
 
 The package has only one module: `Data.Pattern.Any` that exports the two `QuasiQuoter`s named `anypat` and `maypat` together with some utility functions to obtain the variables names from a pattern.
@@ -66,8 +75,7 @@ The package transforms a sequence of patterns to a *view pattern*, or an *expres
   p<sub>2</sub> -&gt; Just n&#8407;
   &vellip;
   p<sub>n</sub> -&gt; Just n&#8407;
-  _ -&gt; Nothing
-<code></pre>
+  _ -&gt; Nothing<code></pre>
 
 with <code>n&#8407;</code> the (sorted) tuple of names found in the patterns. It then makes a view pattern <code>e -&gt; n&#8407;</code> that thus maps the found values for the variables to the names that can then be used in the body of the function.
 

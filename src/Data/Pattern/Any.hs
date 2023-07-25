@@ -13,7 +13,16 @@
 -- will fire in case any of the patterns matches. If there are any variable names, it will match these. For the 'anypat' it requires that all
 -- variables occur in all patterns. For 'maypat' that is not a requirement. For both 'QuasiQuoter's, it is however required that the variables
 -- have the same type in each pattern.
-module Data.Pattern.Any (patVars, patVars', anypat, maypat) where
+module Data.Pattern.Any
+  ( -- * Quasiquoters
+    anypat,
+    maypat,
+
+    -- * derive variable names names from patterns
+    patVars,
+    patVars',
+  )
+where
 
 import Control.Arrow (first)
 import Control.Monad ((>=>))

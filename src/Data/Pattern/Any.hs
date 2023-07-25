@@ -13,7 +13,16 @@
 -- will fire in case any of the patterns matches. If there are any variable names, it will match these. For the 'anypat' it requires that all
 -- variables occur in all patterns. For 'maypat' that is not a requirement. For both 'QuasiQuoter's, it is however required that the variables
 -- have the same type in each pattern.
-module Data.Pattern.Any (patVars, patVars', anypat, maypat) where
+module Data.Pattern.Any
+  ( -- * Quasiquoters
+    anypat,
+    maypat,
+
+    -- * derive variable names names from patterns
+    patVars,
+    patVars',
+  )
+where
 
 import Control.Arrow (first)
 import Control.Monad ((>=>))
@@ -23,7 +32,6 @@ import Control.Monad.Fail (MonadFail)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parsePat)
-import Language.Haskell.Exts.SrcLoc (SrcLoc (SrcLoc))
 import Language.Haskell.Meta (toPat)
 import Language.Haskell.TH (Body (NormalB), Exp (AppE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q)
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
@@ -101,10 +109,10 @@ conP :: Name -> [Pat] -> Pat
 conP = ConP
 #endif
 
-bodyPat :: [Name] -> (Exp, Pat)
-bodyPat [] = (ConE 'False, conP 'True [])
-bodyPat [n] = (ConE 'Nothing, conP 'Just [VarP n])
-bodyPat ns = (ConE 'Nothing, conP 'Just [TildeP (TupP (map VarP ns))])
+bodyPat :: Bool -> [Name] -> (Exp, Pat)
+bodyPat _ [] = (ConE 'False, conP 'True [])
+bodyPat b [n] = (ConE 'Nothing, wrapIt (conP 'Just . pure) b (VarP n))
+bodyPat b ns = (ConE 'Nothing, wrapIt (conP 'Just . pure) b (TildeP (TupP (map VarP ns))))
 
 transName' :: HowPass -> Name -> Exp
 transName' Simple = VarE
@@ -122,16 +130,23 @@ _transName :: (HowPass, Name) -> Exp
 _transName = transName
 #endif
 
-bodyExp :: [(HowPass, Name)] -> Exp
-bodyExp [] = ConE 'True
-bodyExp [n] = ConE 'Just `AppE` transName n
-bodyExp ns = ConE 'Just `AppE` TupE (map _transName ns)
+wrapIt :: (a -> a) -> Bool -> a -> a
+wrapIt f = go
+  where
+    go False = id
+    go True = f
+
+bodyExp :: Bool -> [(HowPass, Name)] -> Exp
+bodyExp _ [] = ConE 'True
+bodyExp b [n] = wrapIt (ConE 'Just `AppE`) b (transName n)
+bodyExp b ns = wrapIt (ConE 'Just `AppE`) b (TupE (map _transName ns))
 
 unionCaseFunc' :: [Pat] -> [Name] -> [[(HowPass, Name)]] -> (Exp, Pat)
-unionCaseFunc' ps ns ns' = (LamCaseE (zipWith (\p' n -> Match p' (NormalB (bodyExp n)) []) ps ns' ++ [Match WildP bf []]), p)
+unionCaseFunc' ps ns ns' = (LamCaseE (zipWith (\p' n -> Match p' (NormalB (bodyExp partial n)) []) ps ns' ++ add), p)
   where
-    ~(ef, p) = bodyPat ns
-    bf = NormalB ef
+    ~(ef, p) = bodyPat partial ns
+    partial = WildP `notElem` ps
+    add = [Match WildP (NormalB ef) [] | partial]
 
 sortedUnion :: Ord a => b -> c -> (b -> c -> d) -> [(b, a)] -> [(c, a)] -> [(d, a)]
 sortedUnion v0 v1 f = go
@@ -143,29 +158,41 @@ sortedUnion v0 v1 f = go
       LT -> (f b0 v1, x) : go xs ya
     go xs [] = map (first (`f` v1)) xs
 
-unionCaseFunc :: MonadFail m => Bool -> NonEmpty Pat -> m Pat
-unionCaseFunc chk ps@(p0 :| ps')
-  | not chk || all fst ns = pure (uncurry ViewP (unionCaseFunc' (p0 : ps') (map snd ns) ns'))
+unionCaseFuncWith :: MonadFail m => ((Exp, Pat) -> a) -> Bool -> NonEmpty Pat -> m a
+unionCaseFuncWith f chk ps@(p0 :| ps')
+  | not chk || all fst ns = pure (f (unionCaseFunc' (p0 : ps') (map snd ns) ns'))
   | otherwise = fail "Not all patterns have the same variable names"
   where
     (ns, ns') = unionPats ps
 
--- unionCaseFunc' :: [Pat] -> (Exp
+unionCaseFunc :: MonadFail m => Bool -> NonEmpty Pat -> m Pat
+unionCaseFunc = unionCaseFuncWith (uncurry ViewP)
 
-parsePatternSequence' :: (Pat -> b) -> (Pat -> a -> b) -> (String -> ParseResult a) -> String -> ParseResult b
-parsePatternSequence' zer cmb rec s = case go s of
-  p@(ParseFailed (SrcLoc _ _ n) _) -> case splitAt (n - 1) s of
-    (xs, _ : ys) -> cmb <$> go xs <*> rec ys
-    _ -> zer <$> p
-  ParseOk p -> pure (zer p)
-  where
-    go = fmap toPat . parsePat
+unionCaseExp :: MonadFail m => Bool -> NonEmpty Pat -> m Exp
+unionCaseExp = unionCaseFuncWith fst
 
-parsePatternSequence'' :: String -> ParseResult [Pat]
-parsePatternSequence'' = parsePatternSequence' pure (:) parsePatternSequence''
-
+#if MIN_VERSION_template_haskell(2,18,0)
 parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
-parsePatternSequence = parsePatternSequence' (:| []) (:|) parsePatternSequence''
+parsePatternSequence s = go (toPat <$> parsePat ('(' : s ++ ")"))
+  where
+    go (ParseOk (ConP n [] [])) | n == '() = fail "no patterns specified"
+    go (ParseOk (ParensP p)) = pure (p :| [])
+    go (ParseOk (TupP [])) = fail "no patterns specified"
+    go (ParseOk (TupP (p : ps))) = pure (p :| ps)
+    go (ParseOk _) = fail "not a sequence of patterns"
+    go (ParseFailed l m) = ParseFailed l m
+#else
+parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
+parsePatternSequence s = go (toPat <$> parsePat ('(' : s ++ ")"))
+  where
+    go (ParseOk (ConP n [])) | n == '() = fail "no patterns specified"
+    go (ParseOk (ParensP p)) = pure (p :| [])
+    go (ParseOk (TupP [])) = fail "no patterns specified"
+    go (ParseOk (TupP (p : ps))) = pure (p :| ps)
+    go (ParseOk _) = fail "not a sequence of patterns"
+    go (ParseFailed l m) = ParseFailed l m
+
+#endif
 
 liftFail :: MonadFail m => ParseResult a -> m a
 liftFail (ParseOk x) = pure x
@@ -179,7 +206,7 @@ failQ = const (fail "The QuasiQuoter can only work to generate code as pattern."
 anypat ::
   -- | The quasiquoter that can be used as pattern.
   QuasiQuoter
-anypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ
+anypat = QuasiQuoter ((liftFail >=> unionCaseExp True) . parsePatternSequence) ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ
 
 -- | A quasiquoter to specify multiple patterns that will succeed if any of these patterns match. Patterns don't have to have the same variable names but if a variable is shared over the
 -- different patterns, it should have the same type. In case a variable name does not appear in all patterns, it will be passed as a 'Maybe' to the clause with 'Nothing' if a pattern matched
@@ -187,4 +214,4 @@ anypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc True) . parsePatternSequ
 maypat ::
   -- | The quasiquoter that can be used as pattern.
   QuasiQuoter
-maypat = QuasiQuoter failQ ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
+maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ

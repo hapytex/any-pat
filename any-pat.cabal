@@ -1,6 +1,6 @@
 name:                any-pat
 version:             0.1.0.0
--- synopsis:
+synopsis:            Quasiquoters that act on a sequence of patterns and compiles these view into patterns and expressions.
 -- description:
 homepage:            https://github.com/hapytex/any-pat#readme
 license:             BSD3

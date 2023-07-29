@@ -217,7 +217,8 @@ maypat ::
   QuasiQuoter
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
 
-inRange :: Enum a =>
+inRange :: Enum a => RangeObj a -> a -> Bool
+inRange = undefined
 
 rangepat :: QuasiQuoter
 rangepat = QuasiQuoter ()

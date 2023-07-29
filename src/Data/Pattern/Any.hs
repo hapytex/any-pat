@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, DeriveFunctor #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -21,23 +21,35 @@ module Data.Pattern.Any
     -- * derive variable names names from patterns
     patVars,
     patVars',
+
+    -- * Range objects
+    RangeObj(FromRange, FromThenRange, FromToRange, FromThenToRange),
+    rangeToList,
+    inRange
   )
 where
 
 import Control.Arrow (first)
+import Control.Applicative(liftA2)
 import Control.Monad ((>=>))
 # if !MIN_VERSION_base(4,13,0)
 import Control.Monad.Fail (MonadFail)
 #endif
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parsePat)
-import Language.Haskell.Meta (toPat)
-import Language.Haskell.TH (Body (NormalB), Exp (AppE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q)
+import Language.Haskell.Exts.Parser (ParseResult(ParseFailed, ParseOk), parsePat, parseExp)
+import Language.Haskell.Meta (toExp, toPat)
+import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range(FromR, FromThenR, FromToR, FromThenToR))
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
-data RangeObj a = FromR a | FromThenR a a | FromToR a | FromThenToR a
+data RangeObj a = FromRange a | FromThenRange a a | FromToRange a a | FromThenToRange a a a deriving (Eq, Functor, Read, Show)
+
+rangeToList :: Enum a => RangeObj a -> [a]
+rangeToList (FromRange b) = enumFrom b
+rangeToList (FromThenRange b t) = enumFromThen b t
+rangeToList (FromToRange b e) = enumFromTo b e
+rangeToList (FromThenToRange b t e) = enumFromThenTo b t e
 
 -- | Provides a list of variable names for a given 'Pat'tern. The list is /not/ sorted. If the same variable name occurs multiple times (which does not make much sense), it will be listed multiple times.
 patVars' ::
@@ -200,7 +212,25 @@ liftFail (ParseOk x) = pure x
 liftFail (ParseFailed _ s) = fail s
 
 failQ :: a -> Q b
-failQ = const (fail "The QuasiQuoter can only work to generate code as pattern.")
+failQ = const (fail "The QuasiQuoter can only work to generate code as pattern or expression.")
+
+parseRange :: String -> ParseResult Range
+parseRange s = go (toExp <$> parseExp ('[' : s ++ "]"))
+  where
+    go (ParseOk (ArithSeqE r)) = pure r
+    go _ = fail "Not a range expression"
+
+rangeToRangeObj :: Range -> RangeObj Exp
+rangeToRangeObj (FromR b) = FromRange b
+rangeToRangeObj (FromThenR b s) = FromThenRange b s
+rangeToRangeObj (FromToR b e) = FromToRange b e
+rangeToRangeObj (FromThenToR b s e) = FromThenToRange b s e
+
+rangeObjToExp :: RangeObj Exp -> Exp
+rangeObjToExp (FromRange b) = ConE 'FromRange `AppE` b
+rangeObjToExp (FromThenRange b s) = ConE 'FromThenRange `AppE` b `AppE` s
+rangeObjToExp (FromToRange b e) = ConE 'FromToRange `AppE` b `AppE` e
+rangeObjToExp (FromThenToRange b s e) = ConE 'FromThenToRange `AppE` b `AppE` s `AppE` e
 
 -- | A quasquoter to specify multiple patterns that will succeed if any of the patterns match. All patterns should have the same set of variables and these should
 -- have the same type, otherwise a variable would have two different types, and if a variable is absent in one of the patterns, the question is what to pass as value.
@@ -217,8 +247,27 @@ maypat ::
   QuasiQuoter
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
 
+_rangeCheck :: Int -> Int -> Int -> Bool
+_rangeCheck b e x = b <= x && x <= e
+
+_modCheck :: Int -> Int -> Int -> Bool
+_modCheck b t x = (x - b) `mod` (t - b) == 0
+
 inRange :: Enum a => RangeObj a -> a -> Bool
-inRange = undefined
+inRange r = go (fromEnum <$> r) . fromEnum
+  where go (FromRange b) = (b <=)
+        go (FromToRange b e) = _rangeCheck b e
+        go (FromThenRange b t)
+          | EQ <- cmp = (b ==)
+          | LT <- cmp = liftA2 (&&) (b <=) (_modCheck b t)
+          | otherwise = liftA2 (&&) (b >=) (_modCheck b t)
+          where cmp = compare b t
+        go (FromThenToRange b t e)
+          | EQ <- cmp, e >= b = (b ==)
+          | LT <- cmp, e >= b = liftA2 (&&) (_rangeCheck b e) (_modCheck b t)
+          | GT <- cmp, e <= b = liftA2 (&&) (_rangeCheck e b) (_modCheck b t)
+          | otherwise = const False  -- empty range
+          where cmp = compare b t
 
 rangepat :: QuasiQuoter
-rangepat = QuasiQuoter ()
+rangepat = QuasiQuoter failQ ((liftFail >=> (pure . (`ViewP` ConP 'True [] []) . (VarE 'inRange `AppE`) . rangeObjToExp . rangeToRangeObj)) . parseRange) failQ failQ

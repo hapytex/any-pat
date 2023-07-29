@@ -32,6 +32,28 @@ library
                        -Wmissing-home-modules
                        -Wredundant-constraints
 
+test-suite             all-pat
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  hs-source-dirs:      test
+  other-modules:
+      Data.Pattern.AnySpec
+  build-depends:
+      base
+    , any-pat
+    , hspec ==2.*
+    , parsec >=3.0
+    , QuickCheck >=2.1
+  build-tool-depends:
+      hspec-discover:hspec-discover == 2.*
+  default-language:    Haskell2010
+  default-extensions:
+  ghc-options:       -Wall -Wcompat -Wcompat
+                     -Wincomplete-record-updates
+                     -Wincomplete-uni-patterns
+                     -Wredundant-constraints
+
+
 source-repository head
   type:     git
   location: https://github.com/hapytex/any-pat

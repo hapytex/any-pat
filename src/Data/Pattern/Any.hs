@@ -37,6 +37,7 @@ import Language.Haskell.TH (Body (NormalB), Exp (AppE, ConE, LamCaseE, TupE, Var
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
+data RangeObj a = FromR a | FromThenR a a | FromToR a | FromThenToR a
 
 -- | Provides a list of variable names for a given 'Pat'tern. The list is /not/ sorted. If the same variable name occurs multiple times (which does not make much sense), it will be listed multiple times.
 patVars' ::
@@ -215,3 +216,8 @@ maypat ::
   -- | The quasiquoter that can be used as pattern.
   QuasiQuoter
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
+
+inRange :: Enum a =>
+
+rangepat :: QuasiQuoter
+rangepat = QuasiQuoter ()

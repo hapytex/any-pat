@@ -48,10 +48,14 @@ data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
 
 -- | A 'RangeObj' that specifies a range with a start value and optionally a step value and end value.
 data RangeObj a
-  = FromRange a  -- ^ A 'RangeObj' object that only has a start value, in Haskell specified as @[b ..]@.
-  | FromThenRange a a  -- ^ A 'RangeObj' object that has a start value and end value, in Haskell specified as @[b .. e]@.
-  | FromToRange a a  -- ^ A 'RangeObj' object with a start and next value, in Haskell specified as @[b, s ..]@.
-  | FromThenToRange a a a  -- ^ A 'RangeObj' object with a start, next value and end value, in Haskell specified as @[b, s .. e]@.
+  = -- | A 'RangeObj' object that only has a start value, in Haskell specified as @[b ..]@.
+    FromRange a
+  | -- | A 'RangeObj' object that has a start value and end value, in Haskell specified as @[b .. e]@.
+    FromThenRange a a
+  | -- | A 'RangeObj' object with a start and next value, in Haskell specified as @[b, s ..]@.
+    FromToRange a a
+  | -- | A 'RangeObj' object with a start, next value and end value, in Haskell specified as @[b, s .. e]@.
+    FromThenToRange a a a
   deriving (Eq, Functor, Read, Show)
 
 instance Enum a => Semigroup (RangeObj a) where
@@ -62,9 +66,9 @@ instance Enum a => Semigroup (RangeObj a) where
       go (FromToRange b1 e1) (FromRange b2) = FromToRange (max b1 b2) e1
       go (FromToRange b1 e1) (FromToRange b2 e2) = FromToRange (max b1 b2) (min e1 e2)
 
-
 -- | Convert the 'RangeObj' to a list of the values defined by the range.
-rangeToList :: Enum a =>
+rangeToList ::
+  Enum a =>
   -- | The 'RangeObj' item to convert to a list.
   RangeObj a ->
   -- | A list of items the 'RangeObj' spans.
@@ -244,18 +248,22 @@ parseRange s = go (toExp <$> parseExp ('[' : s ++ "]"))
     go _ = fail "Not a range expression"
 
 -- | Convert a 'Range' objects from the 'Language.Haskell.TH' module to a 'RangeObj' with 'Exp' as parameters.
-rangeToRangeObj
-  :: Range  -- ^ The 'Range' object to convert.
-  -> RangeObj Exp  -- ^ The equivalent 'RangeObj' with the 'Exp'ressions as parameters.
+rangeToRangeObj ::
+  -- | The 'Range' object to convert.
+  Range ->
+  -- | The equivalent 'RangeObj' with the 'Exp'ressions as parameters.
+  RangeObj Exp
 rangeToRangeObj (FromR b) = FromRange b
 rangeToRangeObj (FromThenR b s) = FromThenRange b s
 rangeToRangeObj (FromToR b e) = FromToRange b e
 rangeToRangeObj (FromThenToR b s e) = FromThenToRange b s e
 
 -- | Convert a 'RangeObj' to the corresponding 'Exp'ression. This will all the appropriate 'RangeObj' data constructor with the parameters.
-rangeObjToExp
-  :: RangeObj Exp  -- ^ A 'RangeObj' with 'Exp'ressions as parameters.
-  -> Exp  -- ^ An 'Exp'ression that contains the data constructor applied to the parameters.
+rangeObjToExp ::
+  -- | A 'RangeObj' with 'Exp'ressions as parameters.
+  RangeObj Exp ->
+  -- | An 'Exp'ression that contains the data constructor applied to the parameters.
+  Exp
 rangeObjToExp (FromRange b) = ConE 'FromRange `AppE` b
 rangeObjToExp (FromThenRange b s) = ConE 'FromThenRange `AppE` b `AppE` s
 rangeObjToExp (FromToRange b e) = ConE 'FromToRange `AppE` b `AppE` e

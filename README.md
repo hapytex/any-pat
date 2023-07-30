@@ -13,7 +13,7 @@ This package ships with three `QuasiQuoter`s: `anypat`, `maypat` and `rangepat`.
 `anypat` and `maypat` have the same purpose. Defining multiple possible patterns in a single clause. Indeed, consider the following example:
 
 ```
-mightBe :: (Int, a, a) -> Maybe a
+mightBe ∷ (Int, a, a) → Maybe a
 mightBe (0, a, _) = Just a
 mightBe (1, _, a) = Just a
 mightBe _ = Nothing
@@ -25,7 +25,7 @@ the first two clauses have some repetitive elements. We can combine the two thro
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ViewPatterns #-}
 
-mightBe :: (Int, a, a) -> Maybe a
+mightBe ∷ (Int, a, a) → Maybe a
 mightBe [anypat|(0, a, _), (1, _, a)|] = Just a
 mightBe _ = Nothing
 ```
@@ -36,7 +36,7 @@ or with `maypat`:
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ViewPatterns #-}
 
-mightBe :: (Int, a, a) -> Maybe a
+mightBe ∷ (Int, a, a) → Maybe a
 mightBe [maypat|(0, a _), (1, _, a), _|] = a
 ```
 
@@ -47,7 +47,7 @@ We can also use the `maypat` and `anypat` to generate expressions, with:
 ```
 {-# LANGUAGE QuasiQuotes #-}
 
-mightBe :: (Int, a, a) -> Maybe a
+mightBe ∷ (Int, a, a) → Maybe a
 mightBe = [maypat|(0, a _), (1, _, a), _|]
 ```
 
@@ -57,12 +57,12 @@ The difference between the two `QuasiQuoter`s (`anypat` and `maypat`) are the ha
 
 Therefore `maypat` comes with a different solution: it performs analysis on the variables used in the different patterns. Variables that occur in all patterns are just passed with the real value, variables that occur only in a (strict) subset of the listed patterns, are passed as a `Maybe a` value with `Just x` in case the first pattern that "fires" (left-to-right) for the value has that variable, it will be wrapped in a `Just`, and otherwise, it will pass `Nothing` as that variable.
 
-Some functions in the `base` package, for example, have a simple equivalent with `anypat` or `maypat`, for example [**`listToMaybe :: [a] -> Maybe a`**](https://hackage.haskell.org/package/base-4.18.0.0/docs/Data-Maybe.html#v:listToMaybe) can be implemented as:
+Some functions in the `base` package, for example, have a simple equivalent with `anypat` or `maypat`, for example [**`listToMaybe ∷ [a] → Maybe a`**](https://hackage.haskell.org/package/base-4.18.0.0/docs/Data-Maybe.html#v:listToMaybe) can be implemented as:
 
 ```
 {-# LANGUAGE QuasiQuotes #-}
 
-listToMaybe :: [a] -> Maybe a
+listToMaybe ∷ [a] → Maybe a
 listToMaybe = [maypat|(a:_), _|]
 ```
 
@@ -71,7 +71,7 @@ listToMaybe = [maypat|(a:_), _|]
 `rangepat` defines patterns for range memberships. For example:
 
 ```
-isInRange :: Int -> Bool
+isInRange ∷ Int → Bool
 isInRange [rangepat|0, 5 .. 50|] = True
 isInRange _ = False
 ```
@@ -87,13 +87,13 @@ The package has only one module: `Data.Pattern.Any` that exports the two `QuasiQ
 The package transforms a sequence of patterns to a *view pattern*, or an *expression*, depending on where the quasi quoter is used. If we create a pattern <code>[anypat|p<sub>1</sub>, p<sub>2</sub>, &hellip;, p<sub>n</sub>]</code>, it will create a view pattern that looks like:
 
 <pre><code>\case
-  p<sub>1</sub> -&gt; Just n&#8407;
-  p<sub>2</sub> -&gt; Just n&#8407;
+  p<sub>1</sub> &rarr; Just n&#8407;
+  p<sub>2</sub> &rarr; Just n&#8407;
   &vellip;
-  p<sub>n</sub> -&gt; Just n&#8407;
+  p<sub>n</sub> &rarr; Just n&#8407;
   _ -&gt; Nothing</code></pre>
 
-with <code>n&#8407;</code> the (sorted) tuple of names found in the patterns. It then makes a view pattern <code>e -&gt; n&#8407;</code> that thus maps the found values for the variables to the names that can then be used in the body of the function.
+with <code>n&#8407;</code> the (sorted) tuple of names found in the patterns. It then makes a view pattern <code>e &rarr; n&#8407;</code> that thus maps the found values for the variables to the names that can then be used in the body of the function.
 
 There are some (small) optimizations that for example are used if no variable names are used in the patterns, or only one. If a wildcard pattern is used, it can also omit the `Maybe` data type.
 

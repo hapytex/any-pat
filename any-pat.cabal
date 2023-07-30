@@ -1,5 +1,5 @@
 name:                any-pat
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Quasiquoters that act on a sequence of patterns and compiles these view into patterns and expressions.
 -- description:
 homepage:            https://github.com/hapytex/any-pat#readme
@@ -31,6 +31,28 @@ library
                        -Wincomplete-uni-patterns
                        -Wmissing-home-modules
                        -Wredundant-constraints
+
+test-suite             all-pat
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  hs-source-dirs:      test
+  other-modules:
+      Data.Pattern.AnySpec
+  build-depends:
+      base
+    , any-pat
+    , hspec ==2.*
+    , parsec >=3.0
+    , QuickCheck >=2.1
+  build-tool-depends:
+      hspec-discover:hspec-discover == 2.*
+  default-language:    Haskell2010
+  default-extensions:
+  ghc-options:       -Wall -Wcompat -Wcompat
+                     -Wincomplete-record-updates
+                     -Wincomplete-uni-patterns
+                     -Wredundant-constraints
+
 
 source-repository head
   type:     git

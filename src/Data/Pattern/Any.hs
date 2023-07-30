@@ -281,7 +281,17 @@ _rangeCheck b e x = b <= x && x <= e
 _modCheck :: Int -> Int -> Int -> Bool
 _modCheck b t x = (x - b) `mod` (t - b) == 0
 
-inRange :: Enum a => RangeObj a -> a -> Bool
+-- | Check if the given value is in the given 'RangeObj'. This function has some caveats, especially with floating points or other 'Enum' instances
+-- where 'fromEnum' and 'toEnum' are no bijections. For example for floating points, `12.5` and `12.2` both map on the same item, as a result, the enum
+-- will fail to work properly.
+inRange ::
+  Enum a =>
+  -- | The 'RangeObj' for which we check membership.
+  RangeObj a ->
+  -- | The element for which we check the membership.
+  a ->
+  -- 'True' if the element is an element of the 'RangeObj'; 'False' otherwise.
+  Bool
 inRange r = go (fromEnum <$> r) . fromEnum
   where
     go (FromRange b) = (b <=)

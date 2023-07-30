@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -17,10 +18,16 @@ module Data.Pattern.Any
   ( -- * Quasiquoters
     anypat,
     maypat,
+    rangepat,
 
     -- * derive variable names names from patterns
     patVars,
     patVars',
+
+    -- * Range objects
+    RangeObj (FromRange, FromThenRange, FromToRange, FromThenToRange),
+    rangeToList,
+    inRange,
   )
 where
 
@@ -31,12 +38,36 @@ import Control.Monad.Fail (MonadFail)
 #endif
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parsePat)
-import Language.Haskell.Meta (toPat)
-import Language.Haskell.TH (Body (NormalB), Exp (AppE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q)
+import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parseExp, parsePat)
+import Language.Haskell.Meta (toExp, toPat)
+import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR))
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
+
+-- | A 'RangeObj' that specifies a range with a start value and optionally a step value and end value.
+data RangeObj a
+  = -- | A 'RangeObj' object that only has a start value, in Haskell specified as @[b ..]@.
+    FromRange a
+  | -- | A 'RangeObj' object that has a start value and end value, in Haskell specified as @[b .. e]@.
+    FromThenRange a a
+  | -- | A 'RangeObj' object with a start and next value, in Haskell specified as @[b, s ..]@.
+    FromToRange a a
+  | -- | A 'RangeObj' object with a start, next value and end value, in Haskell specified as @[b, s .. e]@.
+    FromThenToRange a a a
+  deriving (Eq, Functor, Read, Show)
+
+-- | Convert the 'RangeObj' to a list of the values defined by the range.
+rangeToList ::
+  Enum a =>
+  -- | The 'RangeObj' item to convert to a list.
+  RangeObj a ->
+  -- | A list of items the 'RangeObj' spans.
+  [a]
+rangeToList (FromRange b) = enumFrom b
+rangeToList (FromThenRange b t) = enumFromThen b t
+rangeToList (FromToRange b e) = enumFromTo b e
+rangeToList (FromThenToRange b t e) = enumFromThenTo b t e
 
 -- | Provides a list of variable names for a given 'Pat'tern. The list is /not/ sorted. If the same variable name occurs multiple times (which does not make much sense), it will be listed multiple times.
 patVars' ::
@@ -51,8 +82,8 @@ patVars' (VarP n) = (n :)
 patVars' (TupP ps) = patVarsF ps
 patVars' (UnboxedTupP ps) = patVarsF ps
 patVars' (UnboxedSumP p _ _) = patVars' p
-patVars' (InfixP p1 _ p2) = patVars' p1 . patVars' p2
-patVars' (UInfixP p1 _ p2) = patVars' p1 . patVars' p2
+patVars' (InfixP p₁ _ p₂) = patVars' p₁ . patVars' p₂
+patVars' (UInfixP p₁ _ p₂) = patVars' p₁ . patVars' p₂
 patVars' (ParensP p) = patVars' p
 patVars' (TildeP p) = patVars' p
 patVars' (BangP p) = patVars' p
@@ -199,12 +230,40 @@ liftFail (ParseOk x) = pure x
 liftFail (ParseFailed _ s) = fail s
 
 failQ :: a -> Q b
-failQ = const (fail "The QuasiQuoter can only work to generate code as pattern.")
+failQ = const (fail "The QuasiQuoter can only work to generate code as pattern or expression.")
+
+parseRange :: String -> ParseResult Range
+parseRange s = go (toExp <$> parseExp ('[' : s ++ "]"))
+  where
+    go (ParseOk (ArithSeqE r)) = pure r
+    go _ = fail "Not a range expression"
+
+-- | Convert a 'Range' objects from the 'Language.Haskell.TH' module to a 'RangeObj' with 'Exp' as parameters.
+rangeToRangeObj ::
+  -- | The 'Range' object to convert.
+  Range ->
+  -- | The equivalent 'RangeObj' with the 'Exp'ressions as parameters.
+  RangeObj Exp
+rangeToRangeObj (FromR b) = FromRange b
+rangeToRangeObj (FromThenR b s) = FromThenRange b s
+rangeToRangeObj (FromToR b e) = FromToRange b e
+rangeToRangeObj (FromThenToR b s e) = FromThenToRange b s e
+
+-- | Convert a 'RangeObj' to the corresponding 'Exp'ression. This will all the appropriate 'RangeObj' data constructor with the parameters.
+rangeObjToExp ::
+  -- | A 'RangeObj' with 'Exp'ressions as parameters.
+  RangeObj Exp ->
+  -- | An 'Exp'ression that contains the data constructor applied to the parameters.
+  Exp
+rangeObjToExp (FromRange b) = ConE 'FromRange `AppE` b
+rangeObjToExp (FromThenRange b s) = ConE 'FromThenRange `AppE` b `AppE` s
+rangeObjToExp (FromToRange b e) = ConE 'FromToRange `AppE` b `AppE` e
+rangeObjToExp (FromThenToRange b s e) = ConE 'FromThenToRange `AppE` b `AppE` s `AppE` e
 
 -- | A quasquoter to specify multiple patterns that will succeed if any of the patterns match. All patterns should have the same set of variables and these should
 -- have the same type, otherwise a variable would have two different types, and if a variable is absent in one of the patterns, the question is what to pass as value.
 anypat ::
-  -- | The quasiquoter that can be used as pattern.
+  -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
 anypat = QuasiQuoter ((liftFail >=> unionCaseExp True) . parsePatternSequence) ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ
 
@@ -212,6 +271,53 @@ anypat = QuasiQuoter ((liftFail >=> unionCaseExp True) . parsePatternSequence) (
 -- different patterns, it should have the same type. In case a variable name does not appear in all patterns, it will be passed as a 'Maybe' to the clause with 'Nothing' if a pattern matched
 -- without that variable name, and a 'Just' if the (first) pattern that matched had such variable.
 maypat ::
-  -- | The quasiquoter that can be used as pattern.
+  -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
+
+_rangeCheck :: Int -> Int -> Int -> Bool
+_rangeCheck b e x = b <= x && x <= e
+
+_modCheck :: Int -> Int -> Int -> Bool
+_modCheck b t x = (x - b) `mod` (t - b) == 0
+
+-- | Check if the given value is in the given 'RangeObj'. This function has some caveats, especially with floating points or other 'Enum' instances
+-- where 'fromEnum' and 'toEnum' are no bijections. For example for floating points, `12.5` and `12.2` both map on the same item, as a result, the enum
+-- will fail to work properly.
+inRange ::
+  Enum a =>
+  -- | The 'RangeObj' for which we check membership.
+  RangeObj a ->
+  -- | The element for which we check the membership.
+  a ->
+  -- 'True' if the element is an element of the 'RangeObj'; 'False' otherwise.
+  Bool
+inRange r = go (fromEnum <$> r) . fromEnum
+  where
+    go (FromRange b) = (b <=)
+    go (FromToRange b e) = _rangeCheck b e
+    go (FromThenRange b t)
+      | EQ <- cmp = (b ==)
+      | LT <- cmp = _both (b <=) (_modCheck b t)
+      | otherwise = _both (b >=) (_modCheck b t)
+      where
+        cmp = compare b t
+    go (FromThenToRange b t e)
+      | EQ <- cmp, e >= b = (b ==)
+      | LT <- cmp, e >= b = _both (_rangeCheck b e) (_modCheck b t)
+      | GT <- cmp, e <= b = _both (_rangeCheck e b) (_modCheck b t)
+      | otherwise = const False -- empty range
+      where
+        cmp = compare b t
+
+_both :: (a -> Bool) -> (a -> Bool) -> a -> Bool
+_both f g x = f x && g x
+
+-- | A 'QuasiQuoter' to parse a range expression to a 'RangeObj'. In case the 'QuasiQuoter' is used for a pattern,
+-- it compiles into a /view pattern/ that will work if the element is a member of the 'RangeObj'.
+rangepat ::
+  -- | The quasiquoter that can be used as expression and pattern.
+  QuasiQuoter
+rangepat = QuasiQuoter (parsefun id) (parsefun ((`ViewP` conP 'True []) . (VarE 'inRange `AppE`))) failQ failQ
+  where
+    parsefun pp = (liftFail >=> (pure . pp . rangeObjToExp . rangeToRangeObj)) . parseRange

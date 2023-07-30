@@ -18,6 +18,7 @@ module Data.Pattern.Any
   ( -- * Quasiquoters
     anypat,
     maypat,
+    rangepat,
 
     -- * derive variable names names from patterns
     patVars,
@@ -45,7 +46,13 @@ import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
 
-data RangeObj a = FromRange a | FromThenRange a a | FromToRange a a | FromThenToRange a a a deriving (Eq, Functor, Read, Show)
+-- | A 'RangeObj' that specifies a range with a start value and optionally a step value and end value.
+data RangeObj a
+  = FromRange a  -- ^ A 'RangeObj' object that only has a start value, in Haskell specified as @[b ..]@.
+  | FromThenRange a a  -- ^ A 'RangeObj' object that has a start value and end value, in Haskell specified as @[b .. e]@.
+  | FromToRange a a  -- ^ A 'RangeObj' object with a start and next value, in Haskell specified as @[b, s ..]@.
+  | FromThenToRange a a a  -- ^ A 'RangeObj' object with a start, next value and end value, in Haskell specified as @[b, s .. e]@.
+  deriving (Eq, Functor, Read, Show)
 
 instance Enum a => Semigroup (RangeObj a) where
   r1 <> r2 = toEnum <$> (go `on` fmap fromEnum) r1 r2
@@ -55,7 +62,13 @@ instance Enum a => Semigroup (RangeObj a) where
       go (FromToRange b1 e1) (FromRange b2) = FromToRange (max b1 b2) e1
       go (FromToRange b1 e1) (FromToRange b2 e2) = FromToRange (max b1 b2) (min e1 e2)
 
-rangeToList :: Enum a => RangeObj a -> [a]
+
+-- | Convert the 'RangeObj' to a list of the values defined by the range.
+rangeToList :: Enum a =>
+  -- | The 'RangeObj' item to convert to a list.
+  RangeObj a ->
+  -- | A list of items the 'RangeObj' spans.
+  [a]
 rangeToList (FromRange b) = enumFrom b
 rangeToList (FromThenRange b t) = enumFromThen b t
 rangeToList (FromToRange b e) = enumFromTo b e
@@ -230,13 +243,19 @@ parseRange s = go (toExp <$> parseExp ('[' : s ++ "]"))
     go (ParseOk (ArithSeqE r)) = pure r
     go _ = fail "Not a range expression"
 
-rangeToRangeObj :: Range -> RangeObj Exp
+-- | Convert a 'Range' objects from the 'Language.Haskell.TH' module to a 'RangeObj' with 'Exp' as parameters.
+rangeToRangeObj
+  :: Range  -- ^ The 'Range' object to convert.
+  -> RangeObj Exp  -- ^ The equivalent 'RangeObj' with the 'Exp'ressions as parameters.
 rangeToRangeObj (FromR b) = FromRange b
 rangeToRangeObj (FromThenR b s) = FromThenRange b s
 rangeToRangeObj (FromToR b e) = FromToRange b e
 rangeToRangeObj (FromThenToR b s e) = FromThenToRange b s e
 
-rangeObjToExp :: RangeObj Exp -> Exp
+-- | Convert a 'RangeObj' to the corresponding 'Exp'ression. This will all the appropriate 'RangeObj' data constructor with the parameters.
+rangeObjToExp
+  :: RangeObj Exp  -- ^ A 'RangeObj' with 'Exp'ressions as parameters.
+  -> Exp  -- ^ An 'Exp'ression that contains the data constructor applied to the parameters.
 rangeObjToExp (FromRange b) = ConE 'FromRange `AppE` b
 rangeObjToExp (FromThenRange b s) = ConE 'FromThenRange `AppE` b `AppE` s
 rangeObjToExp (FromToRange b e) = ConE 'FromToRange `AppE` b `AppE` e
@@ -245,7 +264,7 @@ rangeObjToExp (FromThenToRange b s e) = ConE 'FromThenToRange `AppE` b `AppE` s 
 -- | A quasquoter to specify multiple patterns that will succeed if any of the patterns match. All patterns should have the same set of variables and these should
 -- have the same type, otherwise a variable would have two different types, and if a variable is absent in one of the patterns, the question is what to pass as value.
 anypat ::
-  -- | The quasiquoter that can be used as pattern.
+  -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
 anypat = QuasiQuoter ((liftFail >=> unionCaseExp True) . parsePatternSequence) ((liftFail >=> unionCaseFunc True) . parsePatternSequence) failQ failQ
 
@@ -253,7 +272,7 @@ anypat = QuasiQuoter ((liftFail >=> unionCaseExp True) . parsePatternSequence) (
 -- different patterns, it should have the same type. In case a variable name does not appear in all patterns, it will be passed as a 'Maybe' to the clause with 'Nothing' if a pattern matched
 -- without that variable name, and a 'Just' if the (first) pattern that matched had such variable.
 maypat ::
-  -- | The quasiquoter that can be used as pattern.
+  -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
 
@@ -287,7 +306,9 @@ _both f g x = f x && g x
 
 -- | A 'QuasiQuoter' to parse a range expression to a 'RangeObj'. In case the 'QuasiQuoter' is used for a pattern,
 -- it compiles into a /view pattern/ that will work if the element is a member of the 'RangeObj'.
-rangepat :: QuasiQuoter
+rangepat ::
+  -- | The quasiquoter that can be used as expression and pattern.
+  QuasiQuoter
 rangepat = QuasiQuoter (parsefun id) (parsefun ((`ViewP` ConP 'True [] []) . (VarE 'inRange `AppE`))) failQ failQ
   where
     parsefun pp = (liftFail >=> (pure . pp . rangeObjToExp . rangeToRangeObj)) . parseRange

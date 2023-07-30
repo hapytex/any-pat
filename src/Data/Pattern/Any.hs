@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP, DeriveFunctor #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -23,27 +24,36 @@ module Data.Pattern.Any
     patVars',
 
     -- * Range objects
-    RangeObj(FromRange, FromThenRange, FromToRange, FromThenToRange),
+    RangeObj (FromRange, FromThenRange, FromToRange, FromThenToRange),
     rangeToList,
-    inRange
+    inRange,
   )
 where
 
 import Control.Arrow (first)
-import Control.Applicative(liftA2)
 import Control.Monad ((>=>))
 # if !MIN_VERSION_base(4,13,0)
 import Control.Monad.Fail (MonadFail)
 #endif
+import Data.Function (on)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Language.Haskell.Exts.Parser (ParseResult(ParseFailed, ParseOk), parsePat, parseExp)
+import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parseExp, parsePat)
 import Language.Haskell.Meta (toExp, toPat)
-import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range(FromR, FromThenR, FromToR, FromThenToR))
+import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR))
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
+
 data RangeObj a = FromRange a | FromThenRange a a | FromToRange a a | FromThenToRange a a a deriving (Eq, Functor, Read, Show)
+
+instance Enum a => Semigroup (RangeObj a) where
+  r1 <> r2 = toEnum <$> (go `on` fmap fromEnum) r1 r2
+    where
+      go (FromRange b1) (FromRange b2) = FromRange (max b1 b2)
+      go (FromRange b1) (FromToRange b2 e2) = FromToRange (max b1 b2) e2
+      go (FromToRange b1 e1) (FromRange b2) = FromToRange (max b1 b2) e1
+      go (FromToRange b1 e1) (FromToRange b2 e2) = FromToRange (max b1 b2) (min e1 e2)
 
 rangeToList :: Enum a => RangeObj a -> [a]
 rangeToList (FromRange b) = enumFrom b
@@ -64,8 +74,8 @@ patVars' (VarP n) = (n :)
 patVars' (TupP ps) = patVarsF ps
 patVars' (UnboxedTupP ps) = patVarsF ps
 patVars' (UnboxedSumP p _ _) = patVars' p
-patVars' (InfixP p1 _ p2) = patVars' p1 . patVars' p2
-patVars' (UInfixP p1 _ p2) = patVars' p1 . patVars' p2
+patVars' (InfixP p₁ _ p₂) = patVars' p₁ . patVars' p₂
+patVars' (UInfixP p₁ _ p₂) = patVars' p₁ . patVars' p₂
 patVars' (ParensP p) = patVars' p
 patVars' (TildeP p) = patVars' p
 patVars' (BangP p) = patVars' p
@@ -255,19 +265,29 @@ _modCheck b t x = (x - b) `mod` (t - b) == 0
 
 inRange :: Enum a => RangeObj a -> a -> Bool
 inRange r = go (fromEnum <$> r) . fromEnum
-  where go (FromRange b) = (b <=)
-        go (FromToRange b e) = _rangeCheck b e
-        go (FromThenRange b t)
-          | EQ <- cmp = (b ==)
-          | LT <- cmp = liftA2 (&&) (b <=) (_modCheck b t)
-          | otherwise = liftA2 (&&) (b >=) (_modCheck b t)
-          where cmp = compare b t
-        go (FromThenToRange b t e)
-          | EQ <- cmp, e >= b = (b ==)
-          | LT <- cmp, e >= b = liftA2 (&&) (_rangeCheck b e) (_modCheck b t)
-          | GT <- cmp, e <= b = liftA2 (&&) (_rangeCheck e b) (_modCheck b t)
-          | otherwise = const False  -- empty range
-          where cmp = compare b t
+  where
+    go (FromRange b) = (b <=)
+    go (FromToRange b e) = _rangeCheck b e
+    go (FromThenRange b t)
+      | EQ <- cmp = (b ==)
+      | LT <- cmp = _both (b <=) (_modCheck b t)
+      | otherwise = _both (b >=) (_modCheck b t)
+      where
+        cmp = compare b t
+    go (FromThenToRange b t e)
+      | EQ <- cmp, e >= b = (b ==)
+      | LT <- cmp, e >= b = _both (_rangeCheck b e) (_modCheck b t)
+      | GT <- cmp, e <= b = _both (_rangeCheck e b) (_modCheck b t)
+      | otherwise = const False -- empty range
+      where
+        cmp = compare b t
 
+_both :: (a -> Bool) -> (a -> Bool) -> a -> Bool
+_both f g x = f x && g x
+
+-- | A 'QuasiQuoter' to parse a range expression to a 'RangeObj'. In case the 'QuasiQuoter' is used for a pattern,
+-- it compiles into a /view pattern/ that will work if the element is a member of the 'RangeObj'.
 rangepat :: QuasiQuoter
-rangepat = QuasiQuoter failQ ((liftFail >=> (pure . (`ViewP` ConP 'True [] []) . (VarE 'inRange `AppE`) . rangeObjToExp . rangeToRangeObj)) . parseRange) failQ failQ
+rangepat = QuasiQuoter (parsefun id) (parsefun ((`ViewP` ConP 'True [] []) . (VarE 'inRange `AppE`))) failQ failQ
+  where
+    parsefun pp = (liftFail >=> (pure . pp . rangeObjToExp . rangeToRangeObj)) . parseRange

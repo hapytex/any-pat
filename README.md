@@ -2,11 +2,15 @@
 [![Build Status of the package by GitHub actions](https://github.com/hapytex/any-pat/actions/workflows/build-ci.yml/badge.svg)](https://github.com/hapytex/any-pat/actions/workflows/build-ci.yml)
 [![Hackage version badge](https://img.shields.io/hackage/v/any-pat.svg)](https://hackage.haskell.org/package/any-pat)
 
-Combine multiple patterns in a single pattern.
+Combine multiple patterns in a single pattern and range membership checks.
 
 ## Usage
 
-This package ships with two `QuasiQuoter`s: `anypat` and `maypat`. Both have the same purpose. Defining multiple possible patterns in a single clause. Indeed, consider the following example:
+This package ships with three `QuasiQuoter`s: `anypat`, `maypat` and `rangepat`.
+
+### `anypat` and `maypat`
+
+`anypat` and `maypat` have the same purpose. Defining multiple possible patterns in a single clause. Indeed, consider the following example:
 
 ```
 mightBe :: (Int, a, a) -> Maybe a
@@ -62,6 +66,18 @@ listToMaybe :: [a] -> Maybe a
 listToMaybe = [maypat|(a:_), _|]
 ```
 
+### `rangepat`
+
+`rangepat` defines patterns for range memberships. For example:
+
+```
+isInRange :: Int -> Bool
+isInRange [rangepat|0, 5 .. 50|] = True
+isInRange _ = False
+```
+
+This will check in constant time if the number is in the given range (here `[0, 5 .. 50]`). The pattern has however some caveats, especially with floating point numbers, and likely any other type where `fromEnum` en `toEnum` are not *bijective*.
+
 ## Package structure
 
 The package has only one module: `Data.Pattern.Any` that exports the two `QuasiQuoter`s named `anypat` and `maypat` together with some utility functions to obtain the variables names from a pattern.
@@ -80,6 +96,8 @@ The package transforms a sequence of patterns to a *view pattern*, or an *expres
 with <code>n&#8407;</code> the (sorted) tuple of names found in the patterns. It then makes a view pattern <code>e -&gt; n&#8407;</code> that thus maps the found values for the variables to the names that can then be used in the body of the function.
 
 There are some (small) optimizations that for example are used if no variable names are used in the patterns, or only one. If a wildcard pattern is used, it can also omit the `Maybe` data type.
+
+For `rangepat`, it first converts the range to a `RangeObj`, and then checks membership in constant time (given we assume that operations on `Int` run in constant time).
 
 ## `any-pat` is **inferred** *safe* Haskell
 

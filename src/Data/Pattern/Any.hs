@@ -317,6 +317,6 @@ _both f g x = f x && g x
 rangepat ::
   -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
-rangepat = QuasiQuoter (parsefun id) (parsefun ((`ViewP` ConP 'True [] []) . (VarE 'inRange `AppE`))) failQ failQ
+rangepat = QuasiQuoter (parsefun id) (parsefun ((`ViewP` conP 'True []) . (VarE 'inRange `AppE`))) failQ failQ
   where
     parsefun pp = (liftFail >=> (pure . pp . rangeObjToExp . rangeToRangeObj)) . parseRange

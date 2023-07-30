@@ -36,7 +36,6 @@ import Control.Monad ((>=>))
 # if !MIN_VERSION_base(4,13,0)
 import Control.Monad.Fail (MonadFail)
 #endif
-import Data.Function (on)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parseExp, parsePat)

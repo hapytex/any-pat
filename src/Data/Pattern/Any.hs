@@ -58,14 +58,6 @@ data RangeObj a
     FromThenToRange a a a
   deriving (Eq, Functor, Read, Show)
 
-instance Enum a => Semigroup (RangeObj a) where
-  r1 <> r2 = toEnum <$> (go `on` fmap fromEnum) r1 r2
-    where
-      go (FromRange b1) (FromRange b2) = FromRange (max b1 b2)
-      go (FromRange b1) (FromToRange b2 e2) = FromToRange (max b1 b2) e2
-      go (FromToRange b1 e1) (FromRange b2) = FromToRange (max b1 b2) e1
-      go (FromToRange b1 e1) (FromToRange b2 e2) = FromToRange (max b1 b2) (min e1 e2)
-
 -- | Convert the 'RangeObj' to a list of the values defined by the range.
 rangeToList ::
   Enum a =>

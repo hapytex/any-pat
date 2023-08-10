@@ -19,6 +19,7 @@ module Data.Pattern.Any
     anypat,
     maypat,
     rangepat,
+    ϵ,
 
     -- * derive variable names names from patterns
     patVars,
@@ -28,6 +29,7 @@ module Data.Pattern.Any
     RangeObj (FromRange, FromThenRange, FromToRange, FromThenToRange),
     rangeToList,
     inRange,
+    rangeLength,
   )
 where
 
@@ -281,6 +283,12 @@ _rangeCheck b e x = b <= x && x <= e
 _modCheck :: Int -> Int -> Int -> Bool
 _modCheck b t x = (x - b) `mod` (t - b) == 0
 
+rangeLength :: Enum a => RangeObj a => Maybe Int
+rangeLength = fmap (max 0) . go . fmap fromEnum
+  where go (FromToRange b e) = Just (e - b + 1)
+        go (FromThenToRange b s e) = Just ((e - b) `div` (s - b))
+        go _ = Nothing
+
 -- | Check if the given value is in the given 'RangeObj'. This function has some caveats, especially with floating points or other 'Enum' instances
 -- where 'fromEnum' and 'toEnum' are no bijections. For example for floating points, `12.5` and `12.2` both map on the same item, as a result, the enum
 -- will fail to work properly.
@@ -321,3 +329,11 @@ rangepat ::
 rangepat = QuasiQuoter (parsefun id) (parsefun ((`ViewP` conP 'True []) . (VarE 'inRange `AppE`))) failQ failQ
   where
     parsefun pp = (liftFail >=> (pure . pp . rangeObjToExp . rangeToRangeObj)) . parseRange
+
+-- | An alias of the 'rangepat' 'QuasiQuoter', this is used since it looks quite similar to @∊ [a .. b]@,
+-- beware that the @ϵ@ in @[ϵ|a .. b|]@ is not an /element of/ character, but the /Greek lunate epsilon/ character
+-- which only looks similar.
+ϵ ::
+  -- | The quasiquoter that can be used as expression and pattern.
+  QuasiQuoter
+ϵ = rangepat

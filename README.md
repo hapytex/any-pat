@@ -111,3 +111,6 @@ repository*](https://github.com/hapytex/any-pat).
 You can contact the package maintainer by sending a mail to
 [`hapytexeu+gh@gmail.com`](mailto:hapytexeu+gh@gmail.com).
 
+---
+
+This package is dedicated to professor <abbr title="for the Pat-rick of course.">**Pat**rick</abbr> De Causmaecker, who taught most of the basic programming courses at university, not Haskell however.

@@ -283,12 +283,6 @@ _rangeCheck b e x = b <= x && x <= e
 _modCheck :: Int -> Int -> Int -> Bool
 _modCheck b t x = (x - b) `mod` (t - b) == 0
 
-rangeLength :: Enum a => RangeObj a => Maybe Int
-rangeLength = fmap (max 0) . go . fmap fromEnum
-  where go (FromToRange b e) = Just (e - b + 1)
-        go (FromThenToRange b s e) = Just ((e - b) `div` (s - b))
-        go _ = Nothing
-
 -- | Check if the given value is in the given 'RangeObj'. This function has some caveats, especially with floating points or other 'Enum' instances
 -- where 'fromEnum' and 'toEnum' are no bijections. For example for floating points, `12.5` and `12.2` both map on the same item, as a result, the enum
 -- will fail to work properly.

@@ -29,7 +29,6 @@ module Data.Pattern.Any
     RangeObj (FromRange, FromThenRange, FromToRange, FromThenToRange),
     rangeToList,
     inRange,
-    rangeLength,
   )
 where
 

@@ -113,4 +113,4 @@ You can contact the package maintainer by sending a mail to
 
 ---
 
-This package is dedicated to professor <abbr title="for the Pat-rick of course.">**Pat**rick</abbr> De Causmaecker, who taught most of the basic programming courses at university, not Haskell however.
+This package is dedicated to professor <abbr title="for the Pat-rick of course.">**P̲a̲t̲**rick</abbr> De Causmaecker, who taught most of the basic programming courses at university, not Haskell however.

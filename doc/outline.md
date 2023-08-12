@@ -7,32 +7,30 @@ author: Willem Van Onsem
 
 Haskell aims to be a very concise language where repitive code is excluded as much as possible. There are however still cases where the same expression is used for different patterns. Indeed, for example if we want to specify the blocks for different elements:
 
-```
-data Element = H | He | Li | Be | B | C | N | O | F | Ne
-data Block = BlockS | BlockP | BlockD | BlockF
+...
 
-block :: Element -> Block
-block H = BlockS
-block He = BlockS
-block Li = BlockS
-block Be = BlockS
-block B = BlockP
-block C = BlockP
-block N = BlockP
-block O = BlockP
-block F = BlockP
-block Ne = BlockP
+A popular programming task is *FizzBuzz*, where one enters a number, and the program prints all numbers up to that number. If the item is however dividable by three, it prints `Fizz`, if it is dividable by five, it prints `Buzz`, and if it is dividable both by three and five, it prints `FizzBuzz`. We can implement this in Haskell with:
+
+```
+fizzBuzz :: Int -> String
+fizzBuzz n
+  | n `mod` 15 = "FizzBuzz"
+  | n `mod` 3 = "Fizz"
+  | n `mod` 5 = "Buzz"
+  | otherwise = show n
 ```
 
-here several lines of code have most elements in common. A simple way to improve this is with guards that perform range checks, like:
+this however introduces extra syntax: we now have a variable named `n` for example, that is linked
 
-block :: Element -> Block
-block e
-  | H <= e && e <= Be = BlockS
-  | B <= e && e <= Ne = BlockP
+In this paper, we discuss a few `QuasiQuoter`s that can make functions shorter, or at least the code more self-explaining. For example `rangepat` can work with a specified *range* and allows us to define the *FillBuzz* solution as:
+
 ```
-
-this however introduces extra syntax: we now have a variable named `e` for example we do not per se need in the body of the functions. 
+fizzBuzz :: Int -> String
+fizzBuzz [rangepat|0, 15 ..|] = "FizzBuzz"
+fizzBuzz [rangepat|0, 3 ..|] = "Fizz"
+fizzBuzz [rangepat|0, 5 ..|] = "Buzz"
+fizzBuzz n = show n
+```
 
 # View patterns and quasi quoters
 

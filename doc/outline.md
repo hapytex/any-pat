@@ -22,7 +22,7 @@ fizzBuzz n
 
 this however introduces extra syntax: we now have a variable named `n` for example, that is linked
 
-In this paper, we discuss a few `QuasiQuoter`s that can make functions shorter, or at least the code more self-explaining. For example `rangepat` can work with a specified *range* and allows us to define the *FillBuzz* solution as:
+In this paper, we discuss a few `QuasiQuoter`s that can make functions shorter, or at least the code more self-explaining. For example `rangepat` can work with a specified *range* and allows us to define the *FizzBuzz* solution as:
 
 ```
 fizzBuzz :: Int -> String
@@ -56,4 +56,10 @@ A simple
 
 ## Floating points and other caveats
 
-Haskell's `Enum` instances have some caveats though. 
+Haskell's `Enum` instances have some caveats though, and therefore `rangepat` can have unwanted or at least unexpected behavior. One if the problems is that `fromEnum` maps to `Int`, this means that for certain types, the number of values the range spans over, is larger than the `Int`. Indeed, for example `Integer` can store any possible integral value[^1], whereas `Int` is on most systems a 32-bit integer or 64-bit integer. This means that there are two (different) `Integer` values that map on the same `Int` value with `fromEnum`. This thus means that for these two values, the `RangeObj` will not make a difference in membership check, this might not be a problem for *some* `RangeObj` objects, but very likely for others it will.
+
+For floating point numbers, there are more severe problems. A range object assumes that the values are *equidistant*, indeed `[a, a+b ..]` includes all values $$a + n\cdot{} b$$ with $n$ a natural number (including zero), but floating points do not define values in an equidistant manner: eventually the exponent increases and so floating point values become scarser (???) as the value increases. Eventually this means that a range for `[1 ..]` will not contain all integral numbers, since there are no floating point values to represent these numbers.
+
+One of the main problems is that `fromEnum` and `toEnum` are not *bijective*. Indeed, for `Float` and `Double` for example `fromEnum 1.0` and `fromEnum 1.5` both map on `Int`.
+
+[^1] Unless the integral value can no longer be stored in the available memory.

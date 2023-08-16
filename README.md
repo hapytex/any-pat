@@ -89,7 +89,7 @@ The package transforms a sequence of patterns to a *view pattern*, or an *expres
 <pre><code>\case
   p<sub>1</sub> &rarr; Just n&#8407;
   p<sub>2</sub> &rarr; Just n&#8407;
-  &vellip;   &rarr; Just &vellip;
+  &vellip;   &vellip;      &vellip;
   p<sub>n</sub> &rarr; Just n&#8407;
   _ &rarr; Nothing</code></pre>
 

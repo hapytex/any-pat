@@ -75,6 +75,9 @@ listToMaybe = [maypat|(a:_), _|]
 `rangepat` defines patterns for range memberships. For example:
 
 ```
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ViewPatterns #-}
+
 isInRange ∷ Int → Bool
 isInRange [rangepat|0, 5 .. 50|] = True
 isInRange _ = False
@@ -93,7 +96,7 @@ The package transforms a sequence of patterns to a *view pattern*, or an *expres
 <pre><code>\case
   p<sub>1</sub> &rarr; Just n&#8407;
   p<sub>2</sub> &rarr; Just n&#8407;
-  &vellip;  &vellip;    &vellip;
+  &vellip;   &vellip;    &vellip;
   p<sub>n</sub> &rarr; Just n&#8407;
   _ &rarr; Nothing</code></pre>
 

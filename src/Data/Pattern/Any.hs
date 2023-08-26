@@ -1,8 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 -- |
 -- Module      : Data.Pattern.Any
@@ -43,10 +43,10 @@ import Control.Monad ((>=>))
 # if !MIN_VERSION_base(4,13,0)
 import Control.Monad.Fail (MonadFail)
 #endif
-import Data.Function(on)
+import Data.Function (on)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.Semigroup(Max(Max, getMax), Min(Min, getMin))
+import Data.Semigroup (Max (Max, getMax), Min (Min, getMin))
 import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parseExp, parsePat)
 import Language.Haskell.Meta (toExp, toPat)
 import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR))
@@ -73,7 +73,6 @@ pattern FromToRange b t = RangeObj b Nothing (Just t)
 -- | A 'RangeObj' object with a start, next value and end value, in Haskell specified as @[b, s .. e]@.
 pattern FromThenToRange :: a -> a -> a -> RangeObj a
 pattern FromThenToRange b t e = RangeObj b (Just t) (Just e)
-
 
 {-
 instance Enum a => Semigroup (RangeObj a) where
@@ -284,8 +283,9 @@ rangeObjToExp ::
   -- | An 'Exp'ression that contains the data constructor applied to the parameters.
   Exp
 rangeObjToExp (RangeObj b t e) = ConE 'RangeObj `AppE` b `AppE` go t `AppE` go e
-  where go (Just v) = ConE 'Just `AppE` v
-        go Nothing = ConE 'Nothing
+  where
+    go (Just v) = ConE 'Just `AppE` v
+    go Nothing = ConE 'Nothing
 
 -- | A quasquoter to specify multiple patterns that will succeed if any of the patterns match. All patterns should have the same set of variables and these should
 -- have the same type, otherwise a variable would have two different types, and if a variable is absent in one of the patterns, the question is what to pass as value.
@@ -310,14 +310,16 @@ _modCheck b t x = (x - b) `mod` (t - b) == 0
 
 rangeLength :: Enum a => RangeObj a -> Maybe Int
 rangeLength = fmap (max 0) . go . fmap fromEnum
-  where go (RangeObj b t (Just e)) = Just (maybe id (flip div . subtract b) t (e - b) + 1)
-        go _ = Nothing
+  where
+    go (RangeObj b t (Just e)) = Just (maybe id (flip div . subtract b) t (e - b) + 1)
+    go _ = Nothing
 
 _forOrdering :: a -> a -> a -> Ordering -> a
 _forOrdering lt eq gt = go
-  where go LT = lt
-        go EQ = eq
-        go GT = gt
+  where
+    go LT = lt
+    go EQ = eq
+    go GT = gt
 
 _rangeDirection :: Ord a => RangeObj a -> Ordering
 _rangeDirection (RangeObj _ Nothing _) = LT

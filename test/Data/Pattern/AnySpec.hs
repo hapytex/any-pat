@@ -3,12 +3,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Data.Pattern.AnySpec where
 
 import Data.Bool (bool)
 import Data.Int (Int16, Int8)
-import Data.Pattern.Any (RangeObj (FromRange, FromThenRange, FromThenToRange, FromToRange), inRange, rangeToList, rangepat)
+import Data.Pattern.Any (RangeObj, pattern FromRange, pattern FromThenRange, pattern FromThenToRange, pattern FromToRange, inRange, rangeToList, rangepat)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16, Word8)
 import Test.Hspec (describe, it)

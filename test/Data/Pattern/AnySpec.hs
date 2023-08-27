@@ -9,7 +9,7 @@ module Data.Pattern.AnySpec where
 
 import Data.Bool (bool)
 import Data.Int (Int16, Int8)
-import Data.Pattern.Any (RangeObj, pattern FromRange, pattern FromThenRange, pattern FromThenToRange, pattern FromToRange, inRange, rangeToList, rangepat)
+import Data.Pattern.Any (RangeObj, pattern FromRange, pattern FromThenRange, pattern FromThenToRange, pattern FromToRange, inRange, rangeToList, rangepat, rangeLength)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16, Word8)
 import Test.Hspec (describe, it)
@@ -63,6 +63,11 @@ rangepatCheck _ = do
   it "fromThenTo" (property (rangepatFromThenToCheck @a))
   it "fromTo" (property (rangepatFromToCheck @a))
 
+rangeLengthCheck :: Enum a => RangeObj a -> Bool
+rangeLengthCheck r
+  | Just n <- rangeLength r = length (rangeToList r) == n
+  | otherwise = True
+
 spec :: Spec
 spec = do
   describe "range membership check" $ do
@@ -77,6 +82,12 @@ spec = do
     it "Word8" (property (allInRange @Word8))
     it "Word16" (property (allInRange @Word16))
     it "Char" (property (allInRange @Char))
+  describe "rangeLength" $ do
+    it "Int8" (property (rangeLengthCheck @Int8))
+    it "Int16" (property (rangeLengthCheck @Int16))
+    it "Word8" (property (rangeLengthCheck @Word8))
+    it "Word16" (property (rangeLengthCheck @Word16))
+    it "Char" (property (rangeLengthCheck @Char))
   describe "range pattern checks" $ do
     describe "Int8" (rangepatCheck (Proxy :: Proxy Int8))
     describe "Int16" (rangepatCheck (Proxy :: Proxy Int16))

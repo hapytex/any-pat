@@ -44,10 +44,8 @@ import Control.Monad ((>=>))
 # if !MIN_VERSION_base(4,13,0)
 import Control.Monad.Fail (MonadFail)
 #endif
-import Data.Function (on)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.Semigroup (Max (Max, getMax), Min (Min, getMin))
 import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parseExp, parsePat)
 import Language.Haskell.Meta (toExp, toPat)
 import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR))
@@ -75,6 +73,7 @@ pattern FromToRange b t = RangeObj b Nothing (Just t)
 pattern FromThenToRange :: a -> a -> a -> RangeObj a
 pattern FromThenToRange b t e = RangeObj b (Just t) (Just e)
 
+{-
 _minMaybe :: Ord a => Maybe a -> Maybe a -> Maybe a
 _minMaybe x y = getMin <$> (go x <> go y)
   where
@@ -85,7 +84,6 @@ _nextdd dd m1 m2
   | m2 > m1 = m2 + ((m2 - m1) `mod` dd)
   | otherwise = m1
 
-{-
 instance Enum a => Semigroup (RangeObj a) where
   (<>) = on ((fmap toEnum .) . go) (fmap fromEnum)
     where go (RangeObj b1 Nothing e1) (RangeObj b2 Nothing e2) = RangeObj (max b1 b2) Nothing (fmap getMin ((Min <$> e1) <> (Min <$> e2)))

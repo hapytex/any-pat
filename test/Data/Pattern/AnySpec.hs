@@ -29,8 +29,8 @@ instance Arbitrary a => Arbitrary (RangeObj a) where
 testInRange :: forall a. (Enum a, Eq a) => RangeObj a -> a -> Bool
 testInRange r x = (x `elem` bool id (take 10) (allSame r) (rangeToList r)) == inRange r x
 
-allInRange :: forall a. (Enum a, Eq a) => RangeObj a -> a -> Bool
-allInRange r x = all (inRange r) (bool id (take 10) (allSame r) (rangeToList r))
+allInRange :: forall a. (Enum a, Eq a) => RangeObj a -> Bool
+allInRange r = all (inRange r) (bool id (take 10) (allSame r) (rangeToList r))
 
 rangepatFromCheck :: forall a. Enum a => a -> a -> Bool
 rangepatFromCheck b x = f x == inRange (FromRange b) x

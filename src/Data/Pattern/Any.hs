@@ -35,6 +35,7 @@ module Data.Pattern.Any
     rangeToList,
     inRange,
     rangeLength,
+    rangeDirection,
   )
 where
 
@@ -74,14 +75,26 @@ pattern FromToRange b t = RangeObj b Nothing (Just t)
 pattern FromThenToRange :: a -> a -> a -> RangeObj a
 pattern FromThenToRange b t e = RangeObj b (Just t) (Just e)
 
+_minMaybe :: Ord a => Maybe a -> Maybe a -> Maybe a
+_minMaybe x y = getMin <$> (go x <> go y)
+  where go = fmap Min
+
+_nextdd :: Int -> Int -> Int -> Int
+_nextdd dd m1 m2
+  | m2 > m1 = m2 + ((m2 - m1) `mod` dd)
+  | otherwise = m1
+
 {-
 instance Enum a => Semigroup (RangeObj a) where
   (<>) = on ((fmap toEnum .) . go) (fmap fromEnum)
     where go (RangeObj b1 Nothing e1) (RangeObj b2 Nothing e2) = RangeObj (max b1 b2) Nothing (fmap getMin ((Min <$> e1) <> (Min <$> e2)))
-          go (RangeObj b1 (Just t1) e1) (RangeObj b2 Nothing e2) = RangeObj b1 t1 e1
-            where df = fmap . subtract
-                  d1 = df t1 b1
-                  d2 = df t2 b2
+          go r1@(RangeObj b1 jt1@(Just t1) e1) (RangeObj b2 Nothing e2)
+            | LT <- cmp = RangeObj d0 (Just (dd + d0)) (_minMaybe e1 e2))  -- next valid
+            | EQ <- cmp =
+            | GT <- cmp = RangeObj b1 jt1 -- take e2 into account
+            where cmp = rangeDirection r1
+                  dd = t1 - b1
+                  d0 = _nextdd dd b1 b2
 -}
 
 -- | Convert the 'RangeObj' to a list of the values defined by the range.
@@ -311,7 +324,11 @@ _modCheck b t x = (x - b) `mod` (t - b) == 0
 rangeLength :: Enum a => RangeObj a -> Maybe Int
 rangeLength = fmap (max 0) . go . fmap fromEnum
   where
-    go (RangeObj b t (Just e)) = Just (maybe id (flip div . subtract b) t (e - b) + 1)
+    go (RangeObj b t (Just e))
+      | Just t' <- t, b == t' = go'
+      | otherwise = Just (maybe id (flip div . subtract b) t (e - b) + 1)
+      where go' | b <= e = Nothing
+                | otherwise = Just 0
     go _ = Nothing
 
 _forOrdering :: a -> a -> a -> Ordering -> a
@@ -321,9 +338,15 @@ _forOrdering lt eq gt = go
     go EQ = eq
     go GT = gt
 
-_rangeDirection :: Ord a => RangeObj a -> Ordering
-_rangeDirection (RangeObj _ Nothing _) = LT
-_rangeDirection (RangeObj b (Just t) _) = compare b t
+-- | Determine the direction of the range through an 'Ordering' object. For an increasing sequence, 'LT' is used, for a sequence that repeats the element, 'Eq' is returned,
+-- and for a descreasing sequence 'GT' is used.
+rangeDirection :: Ord a =>
+  -- | The 'RangeObj' to determine the direction.
+  RangeObj a ->
+  -- | The direction of the 'RangeObj' as an 'Ordering' object.
+  Ordering
+rangeDirection (RangeObj _ Nothing _) = LT
+rangeDirection (RangeObj b (Just t) _) = compare b t
 
 -- | Check if the given value is in the given 'RangeObj'. This function has some caveats, especially with floating points or other 'Enum' instances
 -- where 'fromEnum' and 'toEnum' are no bijections. For example for floating points, `12.5` and `12.2` both map on the same item, as a result, the enum
@@ -342,8 +365,8 @@ inRange r' = go (fromEnum <$> r') . fromEnum
     rangeCheck (RangeObj b _ (Just e)) = _forOrdering (_rangeCheck b e) (b ==) (_rangeCheck e b)
     go r@(RangeObj _ Nothing _) = rangeCheck r LT
     go r@(RangeObj b (Just t) _)
-      | b == t = rangeCheck r (_rangeDirection r)
-      | otherwise = _both (rangeCheck r (_rangeDirection r)) (_modCheck b t)
+      | b == t = rangeCheck r (rangeDirection r)
+      | otherwise = _both (rangeCheck r (rangeDirection r)) (_modCheck b t)
 
 _both :: (a -> Bool) -> (a -> Bool) -> a -> Bool
 _both f g x = f x && g x

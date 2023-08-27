@@ -77,7 +77,8 @@ pattern FromThenToRange b t e = RangeObj b (Just t) (Just e)
 
 _minMaybe :: Ord a => Maybe a -> Maybe a -> Maybe a
 _minMaybe x y = getMin <$> (go x <> go y)
-  where go = fmap Min
+  where
+    go = fmap Min
 
 _nextdd :: Int -> Int -> Int -> Int
 _nextdd dd m1 m2
@@ -327,8 +328,10 @@ rangeLength = fmap (max 0) . go . fmap fromEnum
     go (RangeObj b t (Just e))
       | Just t' <- t, b == t' = go'
       | otherwise = Just (maybe id (flip div . subtract b) t (e - b) + 1)
-      where go' | b <= e = Nothing
-                | otherwise = Just 0
+      where
+        go'
+          | b <= e = Nothing
+          | otherwise = Just 0
     go _ = Nothing
 
 _forOrdering :: a -> a -> a -> Ordering -> a
@@ -340,7 +343,8 @@ _forOrdering lt eq gt = go
 
 -- | Determine the direction of the range through an 'Ordering' object. For an increasing sequence, 'LT' is used, for a sequence that repeats the element, 'Eq' is returned,
 -- and for a descreasing sequence 'GT' is used.
-rangeDirection :: Ord a =>
+rangeDirection ::
+  Ord a =>
   -- | The 'RangeObj' to determine the direction.
   RangeObj a ->
   -- | The direction of the 'RangeObj' as an 'Ordering' object.

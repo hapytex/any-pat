@@ -56,7 +56,7 @@ import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
 
 -- | A 'RangeObj' that specifies a range with a start value and optionally a step value and end value.
-data RangeObj a = RangeObj {rangeBegin :: a, rangeThen :: (Maybe a), rangeEnd :: (Maybe a)}
+data RangeObj a = RangeObj {rangeBegin :: a, rangeThen :: Maybe a, rangeEnd :: Maybe a}
   deriving (Eq, Functor, Read, Show)
 
 -- | A 'RangeObj' object that only has a start value, in Haskell specified as @[b ..]@.

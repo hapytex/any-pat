@@ -320,7 +320,13 @@ _rangeCheck b e x = b <= x && x <= e
 _modCheck :: Int -> Int -> Int -> Bool
 _modCheck b t x = (x - b) `mod` (t - b) == 0
 
-rangeLength :: Enum a => RangeObj a -> Maybe Int
+-- | Determine the number of items for a 'RangeObj', given that can be determined /easily/. This is only for ranges that
+-- have an /end/ and where the next item is different from the previous (otherwise this generates an endless list).
+rangeLength :: Enum a =>
+  -- | The 'RangeObj' to determine the number of elements from.
+  RangeObj a ->
+  -- | The number of elements of the range object, given that can be determined easily; 'Nothing' otherwise.
+  Maybe Int
 rangeLength = fmap (max 0) . go . fmap fromEnum
   where
     go (RangeObj b t (Just e))

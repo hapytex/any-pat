@@ -322,7 +322,8 @@ _modCheck b t x = (x - b) `mod` (t - b) == 0
 
 -- | Determine the number of items for a 'RangeObj', given that can be determined /easily/. This is only for ranges that
 -- have an /end/ and where the next item is different from the previous (otherwise this generates an endless list).
-rangeLength :: Enum a =>
+rangeLength ::
+  Enum a =>
   -- | The 'RangeObj' to determine the number of elements from.
   RangeObj a ->
   -- | The number of elements of the range object, given that can be determined easily; 'Nothing' otherwise.

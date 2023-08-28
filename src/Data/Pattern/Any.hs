@@ -73,11 +73,11 @@ pattern FromToRange b t = RangeObj b Nothing (Just t)
 pattern FromThenToRange :: a -> a -> a -> RangeObj a
 pattern FromThenToRange b t e = RangeObj b (Just t) (Just e)
 
-{-
+
 _minMaybe :: Ord a => Maybe a -> Maybe a -> Maybe a
-_minMaybe x y = getMin <$> (go x <> go y)
-  where
-    go = fmap Min
+_minMaybe (Just x) (Just y) = Just (min x y)
+_minMaybe Nothing x = x
+_minMaybe x _ = x
 
 _nextdd :: Int -> Int -> Int -> Int
 _nextdd dd m1 m2
@@ -85,16 +85,15 @@ _nextdd dd m1 m2
   | otherwise = m1
 
 instance Enum a => Semigroup (RangeObj a) where
-  (<>) = on ((fmap toEnum .) . go) (fmap fromEnum)
-    where go (RangeObj b1 Nothing e1) (RangeObj b2 Nothing e2) = RangeObj (max b1 b2) Nothing (fmap getMin ((Min <$> e1) <> (Min <$> e2)))
+  r1 <> r2 = toEnum <$> (go (fromEnum <$> r1) (fromEnum <$> r2))
+    where go (RangeObj b1 Nothing e1) (RangeObj b2 Nothing e2) = RangeObj (max b1 b2) Nothing (_minMaybe e1 e2)
           go r1@(RangeObj b1 jt1@(Just t1) e1) (RangeObj b2 Nothing e2)
-            | LT <- cmp = RangeObj d0 (Just (dd + d0)) (_minMaybe e1 e2))  -- next valid
-            | EQ <- cmp =
-            | GT <- cmp = RangeObj b1 jt1 -- take e2 into account
+            | LT <- cmp = RangeObj d0 (Just (dd + d0)) (_minMaybe e1 e2)  -- next valid
+            | EQ <- cmp = undefined
+            | GT <- cmp = RangeObj b1 jt1 e1 -- take e2 into account
             where cmp = rangeDirection r1
                   dd = t1 - b1
                   d0 = _nextdd dd b1 b2
--}
 
 -- | Convert the 'RangeObj' to a list of the values defined by the range.
 rangeToList ::
@@ -357,6 +356,10 @@ rangeDirection ::
 rangeDirection (RangeObj _ Nothing _) = LT
 rangeDirection (RangeObj b (Just t) _) = compare b t
 
+_incCheck :: Ord a => a -> Maybe a -> Bool
+_incCheck _ Nothing = True
+_incCheck m (Just n) = m <= n
+
 -- | Check if the given value is in the given 'RangeObj'. This function has some caveats, especially with floating points or other 'Enum' instances
 -- where 'fromEnum' and 'toEnum' are no bijections. For example for floating points, `12.5` and `12.2` both map on the same item, as a result, the enum
 -- will fail to work properly.
@@ -373,9 +376,13 @@ inRange r' = go (fromEnum <$> r') . fromEnum
     rangeCheck (RangeObj b _ Nothing) = _forOrdering (b <=) (b ==) (b >=)
     rangeCheck (RangeObj b _ (Just e)) = _forOrdering (_rangeCheck b e) (b ==) (_rangeCheck e b)
     go r@(RangeObj _ Nothing _) = rangeCheck r LT
-    go r@(RangeObj b (Just t) _)
-      | b == t = rangeCheck r (rangeDirection r)
+    go r@(RangeObj b (Just t) e)
+      | b == t, _incCheck b e = rangeCheck r (rangeDirection r)
+      | b == t = const False
       | otherwise = _both (rangeCheck r (rangeDirection r)) (_modCheck b t)
+
+(∈) :: Enum a => RangeObj a -> a -> Bool
+(∈) = inRange
 
 _both :: (a -> Bool) -> (a -> Bool) -> a -> Bool
 _both f g x = f x && g x

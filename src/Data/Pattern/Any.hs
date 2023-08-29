@@ -80,14 +80,40 @@ _fMaybe f = go
         go Nothing x = x
         go x _ = x
 
-_nextdd :: Int -> Int -> Int -> Int
-_nextdd dd m1 m2
+_sMaybe :: (a -> a -> a) -> a -> Maybe a -> a
+_sMaybe f = go
+  where go x Nothing = x
+        go x (Just y) = f x y
+
+_nextdd :: Maybe Int -> Int -> Int -> Int
+_nextdd Nothing m1 m2 = max m1 m2
+_nextdd (Just dd) m1 m2
   | m2 > m1 = m2 + ((m1 - m2) `mod` dd)
   | otherwise = m1
 
+_subd :: Num a => RangeObj a -> Maybe a
+_subd (RangeObj b t _) = subtract b <$> t
+
+_gcd' 0 b = (b, 0, 1)
+_gcd' a b = (g, t - (b `div` a) * s, s)
+  where (g, s, t) = _gcd' (b `mod` a) a
+
+_mergers :: Ordering -> (Int -> Int -> Int, Int -> Int -> Int, Int -> Int -> Int)
+_mergers LT = (max, min)
+_mergers EQ = (max, min)
+_mergers GT = (min, max)
+
+_sameDirMerge :: RangeObj Int -> RangeObj Int -> Ordering -> RangeObj Int
+_sameDirMerge r1@(RangeObj b1 t1 e1) r2@(RangeObj b2 t2 e2) o = go
+  where go = RangeObj d0 ((d0 +) <$> dd) (_fMaybe m2 e1 e2)
+        (m1, m2) = _mergers o
+        dd = _fMaybe (\x -> (*) (signum x) . gcd x) (_subd r1) (_subd r2)
+        d0 = m1 b1 b2
+
 instance Enum a => Semigroup (RangeObj a) where
-  r1 <> r2 = toEnum <$> (go (fromEnum <$> r1) (fromEnum <$> r2))
-    where go (RangeObj b1 Nothing e1) (RangeObj b2 Nothing e2) = RangeObj (max b1 b2) Nothing (_fMaybe min e1 e2)
+  ro1 <> ro2 = toEnum <$> (go (fromEnum <$> ro1) (fromEnum <$> ro2))
+    where go r1 r2
+            | _dir
           go r1@(RangeObj b1 jt1@(Just t1) e1) (RangeObj b2 Nothing e2)
             | LT <- cmp = RangeObj d0 (Just (dd + d0)) (_fMaybe min e1 e2)  -- next valid
             | GT <- cmp = undefined -- RangeObj b1 jt1 e1 -- take e2 into account
@@ -103,6 +129,7 @@ instance Enum a => Semigroup (RangeObj a) where
             | otherwise = undefined
             where cmp1 = rangeDirection r1
                   cmp2 = rangeDirection r2
+                  dd = _fMaybe gcd (_subd b1 t1) (subd b2 t2)
 
 -- | Convert the 'RangeObj' to a list of the values defined by the range.
 rangeToList ::

@@ -32,6 +32,32 @@ fizzBuzz [rangepat|0, 5 ..|] = "Buzz"
 fizzBuzz n = show n
 ```
 
+but it is still not completely straightforward, since we have to do the math that the intersection of the two ranges `[0, 3 ..]` and `[0, 5 ..]` is `[0, 15 ..]`, we can simplify this further to:
+
+```
+fizzBuzz :: Int -> String
+fizzBuzz [rangepat|[0, 3 ..] <> [0, 5 ..]|] = "FizzBuzz"
+fizzBuzz [rangepat|0, 3 ..|] = "Fizz"
+fizzBuzz [rangepat|0, 5 ..|] = "Buzz"
+fizzBuzz n = show n
+```
+
+or:
+
+```
+three :: RangeObj Int
+three = [rangepat|0, 3 ..|]
+
+five :: RangeObj Int
+five = [rangepat|0, 3 ..|]
+
+fizzBuzz :: Int -> String
+fizzBuzz [rangepat|three <> five|] = "FizzBuzz"
+fizzBuzz [rangepat|three|] = "Fizz"
+fizzBuzz [rangepat|five|] = "Buzz"
+fizzBuzz n = show n
+```
+
 # View patterns and quasi quoters
 
 Functions in Haskell work with pattern matching. A function typically constists of a number of clauses with in the "head" patterns for the parameters that can contain variable names, and in the body expressions that work with variables in these patterns and variables define in an outer scope. The line will "fire" in case the pattern matches, and it the result will be the expression where it uses the matching variables from the pattern in the expression.

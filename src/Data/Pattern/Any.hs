@@ -74,26 +74,35 @@ pattern FromThenToRange :: a -> a -> a -> RangeObj a
 pattern FromThenToRange b t e = RangeObj b (Just t) (Just e)
 
 
-_minMaybe :: Ord a => Maybe a -> Maybe a -> Maybe a
-_minMaybe (Just x) (Just y) = Just (min x y)
-_minMaybe Nothing x = x
-_minMaybe x _ = x
+_fMaybe :: (a -> a -> a) -> Maybe a -> Maybe a -> Maybe a
+_fMaybe f = go
+  where go (Just x) (Just y) = Just (f x y)
+        go Nothing x = x
+        go x _ = x
 
 _nextdd :: Int -> Int -> Int -> Int
 _nextdd dd m1 m2
-  | m2 > m1 = m2 + ((m2 - m1) `mod` dd)
+  | m2 > m1 = m2 + ((m1 - m2) `mod` dd)
   | otherwise = m1
 
 instance Enum a => Semigroup (RangeObj a) where
   r1 <> r2 = toEnum <$> (go (fromEnum <$> r1) (fromEnum <$> r2))
-    where go (RangeObj b1 Nothing e1) (RangeObj b2 Nothing e2) = RangeObj (max b1 b2) Nothing (_minMaybe e1 e2)
+    where go (RangeObj b1 Nothing e1) (RangeObj b2 Nothing e2) = RangeObj (max b1 b2) Nothing (_fMaybe min e1 e2)
           go r1@(RangeObj b1 jt1@(Just t1) e1) (RangeObj b2 Nothing e2)
-            | LT <- cmp = RangeObj d0 (Just (dd + d0)) (_minMaybe e1 e2)  -- next valid
+            | LT <- cmp = RangeObj d0 (Just (dd + d0)) (_fMaybe min e1 e2)  -- next valid
+            | GT <- cmp = undefined -- RangeObj b1 jt1 e1 -- take e2 into account
             | EQ <- cmp = undefined
-            | GT <- cmp = RangeObj b1 jt1 e1 -- take e2 into account
+            | otherwise = undefined
             where cmp = rangeDirection r1
                   dd = t1 - b1
                   d0 = _nextdd dd b1 b2
+          go (RangeObj b1 t1 e1) (RangeObj b2 t2 e2)
+            | LT <- cmp1, cmp1 == cmp2 = RangeObj (max b1 b2) Nothing (_fMaybe min e1 e2)
+            | GT <- cmp1 = undefined
+            | EQ <- cmp1 = undefined
+            | otherwise = undefined
+            where cmp1 = rangeDirection r1
+                  cmp2 = rangeDirection r2
 
 -- | Convert the 'RangeObj' to a list of the values defined by the range.
 rangeToList ::

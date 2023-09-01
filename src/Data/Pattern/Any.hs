@@ -33,7 +33,7 @@ module Data.Pattern.Any
     pattern FromToRange,
     pattern FromThenToRange,
     rangeToList,
-    inRange,
+    inRange, (∈), (∋),
     rangeLength,
     rangeDirection,
   )
@@ -99,37 +99,40 @@ _gcd' a b = (g, t - (b `div` a) * s, s)
   where (g, s, t) = _gcd' (b `mod` a) a
 
 _mergers :: Ordering -> (Int -> Int -> Int, Int -> Int -> Int, Int -> Int -> Int)
-_mergers LT = (max, min)
-_mergers EQ = (max, min)
-_mergers GT = (min, max)
+_mergers LT = (max, (+), min)
+_mergers EQ = (max, (+), min)
+_mergers GT = (min, (+), max)
 
 _sameDirMerge :: RangeObj Int -> RangeObj Int -> Ordering -> RangeObj Int
-_sameDirMerge r1@(RangeObj b1 t1 e1) r2@(RangeObj b2 t2 e2) o = go
-  where go = RangeObj d0 ((d0 +) <$> dd) (_fMaybe m2 e1 e2)
-        (m1, m2) = _mergers o
-        dd = _fMaybe (\x -> (*) (signum x) . gcd x) (_subd r1) (_subd r2)
+_sameDirMerge r1@(RangeObj b1 t1 e1) r2@(RangeObj b2 t2 e2) o = RangeObj d0 ((d0 +) <$> dd) (_fMaybe m2 e1 e2)
+  where ~(m1, _, m2) = _mergers o
+        dd = _fMaybe (\x -> (*) (signum x) . lcm x) (_subd r1) (_subd r2)
         d0 = m1 b1 b2
+
+_singleRange :: RangeObj Int -> Maybe Int
+_singleRange (RangeObj b _ Nothing) = Just b
+_singleRange (RangeObj b _ (Just e))
+  | b < e = Just b
+  | otherwise = Nothing
+
+_withEqMerge :: RangeObj Int -> RangeObj Int -> RangeObj Int
+_withEqMerge r1@(RangeObj b1 _ e1) r2@(RangeObj b2 _ _)
+  | Just v <- _singleRange r2, not (inRange r1 v) = RangeObj b2 (Just b2) (Just (_sMaybe min b1 e1))
+  | otherwise = r2
+
+_difDirMerge :: RangeObj Int -> RangeObj Int -> Ordering -> RangeObj Int
+_difDirMerge = undefined
 
 instance Enum a => Semigroup (RangeObj a) where
   ro1 <> ro2 = toEnum <$> (go (fromEnum <$> ro1) (fromEnum <$> ro2))
     where go r1 r2
-            | _dir
-          go r1@(RangeObj b1 jt1@(Just t1) e1) (RangeObj b2 Nothing e2)
-            | LT <- cmp = RangeObj d0 (Just (dd + d0)) (_fMaybe min e1 e2)  -- next valid
-            | GT <- cmp = undefined -- RangeObj b1 jt1 e1 -- take e2 into account
-            | EQ <- cmp = undefined
-            | otherwise = undefined
-            where cmp = rangeDirection r1
-                  dd = t1 - b1
-                  d0 = _nextdd dd b1 b2
-          go (RangeObj b1 t1 e1) (RangeObj b2 t2 e2)
-            | LT <- cmp1, cmp1 == cmp2 = RangeObj (max b1 b2) Nothing (_fMaybe min e1 e2)
-            | GT <- cmp1 = undefined
-            | EQ <- cmp1 = undefined
-            | otherwise = undefined
-            where cmp1 = rangeDirection r1
-                  cmp2 = rangeDirection r2
-                  dd = _fMaybe gcd (_subd b1 t1) (subd b2 t2)
+            | _dir1 == _dir2 = _sameDirMerge r1 r2 _dir1
+            | EQ <- _dir1 = _withEqMerge r2 r1
+            | EQ <- _dir2 = _withEqMerge r1 r2
+            | otherwise = _difDirMerge r1 r2 _dir1
+            where _dir1 = rangeDirection r1
+                  _dir2 = rangeDirection r2
+
 
 -- | Convert the 'RangeObj' to a list of the values defined by the range.
 rangeToList ::
@@ -417,8 +420,25 @@ inRange r' = go (fromEnum <$> r') . fromEnum
       | b == t = const False
       | otherwise = _both (rangeCheck r (rangeDirection r)) (_modCheck b t)
 
-(∈) :: Enum a => RangeObj a -> a -> Bool
-(∈) = inRange
+-- | Flipped alias of 'inRange' that checks if an element is in range of a given 'RangeObj'.
+(∈) :: Enum a =>
+  -- | The given element to check membership for.
+  a ->
+  -- | The 'RangeObj' object for which we check membership.
+  RangeObj a ->
+  -- | 'True' if the given element is an element of the given 'RangeObj' object; 'False' otherwise.
+  Bool
+(∈) = flip inRange
+
+-- | Alias of 'inRange' that checks if an element is in range of a given 'RangeObj'.
+(∋) :: Enum a =>
+  -- | The 'RangeObj' object for which we check membership.
+  RangeObj a ->
+  -- | The given element to check membership for.
+  a ->
+  -- | 'True' if the given element is an element of the given 'RangeObj' object; 'False' otherwise.
+  Bool
+(∋) = inRange
 
 _both :: (a -> Bool) -> (a -> Bool) -> a -> Bool
 _both f g x = f x && g x

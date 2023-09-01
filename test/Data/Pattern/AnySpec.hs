@@ -9,7 +9,7 @@ module Data.Pattern.AnySpec where
 
 import Data.Bool (bool)
 import Data.Int (Int16, Int8)
-import Data.Pattern.Any (RangeObj, pattern FromRange, pattern FromThenRange, pattern FromThenToRange, pattern FromToRange, inRange, rangeToList, rangepat, rangeLength)
+import Data.Pattern.Any (RangeObj, pattern FromRange, pattern FromThenRange, pattern FromThenToRange, pattern FromToRange, inRange, rangeToList, rangepat, rangeLength, rangeLastValue)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16, Word8)
 import Test.Hspec (describe, it)
@@ -31,6 +31,11 @@ instance Arbitrary a => Arbitrary (RangeObj a) where
 
 testInRange :: forall a. (Enum a, Eq a) => RangeObj a -> a -> Bool
 testInRange r x = (x `elem` limitRangeList r) == inRange r x
+
+lastValueTest :: (Enum a, Eq a) => RangeObj a -> Bool
+lastValueTest r
+  | Just l <- rangeLastValue r = l == last (limitRangeList r)
+  | otherwise = True
 
 allInRange :: forall a. (Enum a, Eq a) => RangeObj a -> Bool
 allInRange r = all (inRange r) (limitRangeList r)
@@ -98,6 +103,12 @@ spec = do
     it "Word8" (property (rangeLengthCheck @Word8))
     it "Word16" (property (rangeLengthCheck @Word16))
     it "Char" (property (rangeLengthCheck @Char))
+  describe "rangeLastValue" $ do
+    it "Int8" (property (lastValueTest @Int8))
+    it "Int16" (property (lastValueTest @Int16))
+    it "Word8" (property (lastValueTest @Word8))
+    it "Word16" (property (lastValueTest @Word16))
+    it "Char" (property (lastValueTest @Char))
   describe "intersection 1" $ do
     it "Int8" (property (intersectRange @Int8))
     it "Int16" (property (intersectRange @Int16))

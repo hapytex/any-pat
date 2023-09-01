@@ -36,6 +36,7 @@ module Data.Pattern.Any
     inRange, (∈), (∋),
     rangeLength,
     rangeDirection,
+    rangeLastValue
   )
 where
 
@@ -73,6 +74,22 @@ pattern FromToRange b t = RangeObj b Nothing (Just t)
 pattern FromThenToRange :: a -> a -> a -> RangeObj a
 pattern FromThenToRange b t e = RangeObj b (Just t) (Just e)
 
+-- | Determine the last value of a 'RangeObj', given the 'RangeObj' has an /explicit/ end value.
+-- The last value is /not/ per se the end value. For example for @[0, 3 .. 10]@, the last value will
+-- be @9@. If the 'RangeObj' is empty, or has no (explicit) end value, 'Nothing' is returned.
+rangeLastValue :: Enum a => RangeObj a -> Maybe a
+rangeLastValue (RangeObj b Nothing e@(Just e'))
+  | fromEnum b <= fromEnum e' = e
+rangeLastValue (RangeObj b' jt@(Just t') (Just e'))
+  | EQ <- c, e >= b = jt  -- we reuse the item in the 'RangeObj' to save memory
+  | LT <- c, b < e = Just (toEnum (e - ((e - b) `mod` d)))
+  | GT <- c, b > e = Just (toEnum (e - ((e - b) `mod` d)))
+  where c = compare b t
+        b = fromEnum b'
+        t = fromEnum t'
+        e = fromEnum e'
+        d = t - b
+rangeLastValue _ = Nothing
 
 _fMaybe :: (a -> a -> a) -> Maybe a -> Maybe a -> Maybe a
 _fMaybe f = go

@@ -138,7 +138,10 @@ _withEqMerge r1@(RangeObj b1 _ e1) r2@(RangeObj b2 _ _)
   | otherwise = r2
 
 _difDirMerge :: RangeObj Int -> RangeObj Int -> Ordering -> RangeObj Int
-_difDirMerge = undefined
+_difDirMerge r1@(RangeObj b1 t1 e1) r2@(RangeOj b2 t2 e2) _ord = _sameDirMerge r1 (RangeObj (_sMaybe ) e2 (Just b1))  -- important to preserve the hops of the second range
+  where l1 = rangeLastValue r1
+        l2 = rangeLastValue r2
+        ~(m1, _, m2) = _mergers _ord
 
 instance Enum a => Semigroup (RangeObj a) where
   ro1 <> ro2 = toEnum <$> (go (fromEnum <$> ro1) (fromEnum <$> ro2))

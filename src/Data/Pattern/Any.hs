@@ -20,7 +20,11 @@ module Data.Pattern.Any
     anypat,
     maypat,
     rangepat,
+    hashpat,
     ϵ,
+
+    -- * compile hash patterns
+    combineHashViewPats
 
     -- * derive variable names names from patterns
     patVars,
@@ -36,7 +40,7 @@ module Data.Pattern.Any
     inRange, (∈), (∋),
     rangeLength,
     rangeDirection,
-    rangeLastValue
+    rangeLastValue,
   )
 where
 
@@ -45,11 +49,13 @@ import Control.Monad ((>=>))
 # if !MIN_VERSION_base(4,13,0)
 import Control.Monad.Fail (MonadFail)
 #endif
+import Data.HashMap.Strict(lookup)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Language.Haskell.Exts.Parser (ParseResult (ParseFailed, ParseOk), parseExp, parsePat)
+import Language.Haskell.Exts.Extension (Extension(EnableExtension), KnownExtension(ViewPatterns))
+import Language.Haskell.Exts.Parser (ParseMode(extensions), ParseResult (ParseFailed, ParseOk), parseExp, parsePatWithMode, defaultParseMode)
 import Language.Haskell.Meta (toExp, toPat)
-import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR))
+import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, LamE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR), newName)
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
@@ -138,10 +144,11 @@ _withEqMerge r1@(RangeObj b1 _ e1) r2@(RangeObj b2 _ _)
   | otherwise = r2
 
 _difDirMerge :: RangeObj Int -> RangeObj Int -> Ordering -> RangeObj Int
-_difDirMerge r1@(RangeObj b1 t1 e1) r2@(RangeOj b2 t2 e2) _ord = _sameDirMerge r1 (RangeObj (_sMaybe ) e2 (Just b1))  -- important to preserve the hops of the second range
+_difDirMerge r1@(RangeObj b1 t1 e1) r2@(RangeObj b2 t2 e2) _ord = undefined
+  {-_sameDirMerge r1 (RangeObj (_sMaybe ) e2 (Just b1))  -- important to preserve the hops of the second range
   where l1 = rangeLastValue r1
         l2 = rangeLastValue r2
-        ~(m1, _, m2) = _mergers _ord
+        ~(m1, _, m2) = _mergers _ord -}
 
 instance Enum a => Semigroup (RangeObj a) where
   ro1 <> ro2 = toEnum <$> (go (fromEnum <$> ro1) (fromEnum <$> ro2))
@@ -299,27 +306,23 @@ unionCaseFunc = unionCaseFuncWith (uncurry ViewP)
 unionCaseExp :: MonadFail m => Bool -> NonEmpty Pat -> m Exp
 unionCaseExp = unionCaseFuncWith fst
 
-#if MIN_VERSION_template_haskell(2,18,0)
 parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
-parsePatternSequence s = go (toPat <$> parsePat ('(' : s ++ ")"))
-  where
-    go (ParseOk (ConP n [] [])) | n == '() = fail "no patterns specified"
-    go (ParseOk (ParensP p)) = pure (p :| [])
-    go (ParseOk (TupP [])) = fail "no patterns specified"
-    go (ParseOk (TupP (p : ps))) = pure (p :| ps)
-    go (ParseOk _) = fail "not a sequence of patterns"
-    go (ParseFailed l m) = ParseFailed l m
-#else
-parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
-parsePatternSequence s = go (toPat <$> parsePat ('(' : s ++ ")"))
-  where
-    go (ParseOk (ConP n [])) | n == '() = fail "no patterns specified"
-    go (ParseOk (ParensP p)) = pure (p :| [])
-    go (ParseOk (TupP [])) = fail "no patterns specified"
-    go (ParseOk (TupP (p : ps))) = pure (p :| ps)
-    go (ParseOk _) = fail "not a sequence of patterns"
-    go (ParseFailed l m) = ParseFailed l m
+parsePatternSequence s = parsePatWithMode (defaultParseMode { extensions=[EnableExtension ViewPatterns] }) ('(' : s ++ ")") >>= _getPats . toPat
 
+#if MIN_VERSION_template_haskell(2,18,0)
+_getPats :: Pat -> ParseResult (NonEmpty Pat)
+_getPats (ConP n [] []) | n == '() = fail "no patterns specified"
+_getPats (ParensP p) = pure (p :| [])
+_getPats (TupP []) = fail "no patterns specified"
+_getPats (TupP (p : ps)) = pure (p :| ps)
+_getPats _ = fail "not a sequence of patterns"
+#else
+_getPats :: Pat -> ParseResult (NonEmpty Pat)
+_getPats (ConP n []) | n == '() = fail "no patterns specified"
+_getPats (ParensP p) = pure (p :| [])
+_getPats (TupP []) = fail "no patterns specified"
+_getPats (TupP (p : ps)) = pure (p :| ps)
+_getPats _ = fail "not a sequence of patterns"
 #endif
 
 liftFail :: MonadFail m => ParseResult a -> m a
@@ -371,6 +374,27 @@ maypat ::
   -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
+
+_makeTupleExpressions :: Name -> [Pat] -> Q ([Maybe Exp], [Pat])
+_makeTupleExpressions hm = go
+  where go [] = pure ([], [])
+        go (ViewP e p:xs) = (\(es, ps) -> (Just (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm) : es, conP 'Just [p] : ps)) <$> go xs
+        go _ = fail "all items in the hashpat should look like view patterns."
+
+-- | Create a view pattern that maps a HashMap with a locally scoped @hm@ parameter to a the patterns. It thus basically implicitly adds `lookup`
+-- to all expressions and matches these with the given patterns. The compilation fails if not all elements are view patterns.
+combineHashViewPats
+  :: NonEmpty Pat -- ^ The non-empty list of view patterns that are compiled into a viw pattern.
+  -> Q Pat  -- ^ A 'Pat' that is a view pattern that will map a 'Data.HashMap.Strict.HashMap' to make lookups and matches these with the given patterns.
+combineHashViewPats (ViewP e p :| []) = pure (ViewP (AppE (VarE 'Data.HashMap.Strict.lookup) e) (conP 'Just [p]))
+combineHashViewPats (x :| xs) = do
+  hm <- newName "hm"
+  (\(es, ps) -> ViewP (LamE [VarP hm] (TupE es)) (TupP ps)) <$> _makeTupleExpressions hm (x:xs)
+combineHashViewPats _ = fail "all items in the hashpat should look like view patterns."
+
+-- | A quasiquoter to make `Data.HashMap.Strict.HashMap` lookups more convenient. This can only be used as a pattern.
+hashpat :: QuasiQuoter
+hashpat = QuasiQuoter failQ ((liftFail >=> combineHashViewPats) . parsePatternSequence) failQ failQ
 
 _rangeCheck :: Int -> Int -> Int -> Bool
 _rangeCheck b e x = b <= x && x <= e

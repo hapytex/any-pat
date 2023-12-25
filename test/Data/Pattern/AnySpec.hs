@@ -1,4 +1,5 @@
 {-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -8,7 +9,7 @@ module Data.Pattern.AnySpec where
 
 import Data.Bool (bool)
 import Data.Int (Int16, Int8)
-import Data.Pattern.Any (RangeObj (FromRange, FromThenRange, FromThenToRange, FromToRange), inRange, rangeToList, rangepat)
+import Data.Pattern.Any (RangeObj, inRange, rangeLastValue, rangeLength, rangeToList, rangepat, pattern FromRange, pattern FromThenRange, pattern FromThenToRange, pattern FromToRange)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16, Word8)
 import Test.Hspec (describe, it)
@@ -22,14 +23,22 @@ allSame (FromThenRange a b) = a == b
 allSame (FromThenToRange a b _) = a == b
 allSame _ = False
 
+limitRangeList :: (Enum a, Eq a) => RangeObj a -> [a]
+limitRangeList r = bool id (take 10) (allSame r) (rangeToList r)
+
 instance Arbitrary a => Arbitrary (RangeObj a) where
   arbitrary = oneof [FromRange <$> arbitrary, FromThenRange <$> arbitrary <*> arbitrary, FromToRange <$> arbitrary <*> arbitrary, FromThenToRange <$> arbitrary <*> arbitrary <*> arbitrary]
 
 testInRange :: forall a. (Enum a, Eq a) => RangeObj a -> a -> Bool
-testInRange r x = (x `elem` bool id (take 10) (allSame r) (rangeToList r)) == inRange r x
+testInRange r x = (x `elem` limitRangeList r) == inRange r x
 
-allInRange :: forall a. (Enum a, Eq a) => RangeObj a -> a -> Bool
-allInRange r x = all (inRange r) (bool id (take 10) (allSame r) (rangeToList r))
+lastValueTest :: (Enum a, Eq a) => RangeObj a -> Bool
+lastValueTest r
+  | Just l <- rangeLastValue r = l == last (limitRangeList r)
+  | otherwise = True
+
+allInRange :: forall a. (Enum a, Eq a) => RangeObj a -> Bool
+allInRange r = all (inRange r) (limitRangeList r)
 
 rangepatFromCheck :: forall a. Enum a => a -> a -> Bool
 rangepatFromCheck b x = f x == inRange (FromRange b) x
@@ -62,6 +71,11 @@ rangepatCheck _ = do
   it "fromThenTo" (property (rangepatFromThenToCheck @a))
   it "fromTo" (property (rangepatFromToCheck @a))
 
+rangeLengthCheck :: Enum a => RangeObj a -> Bool
+rangeLengthCheck r
+  | Just n <- rangeLength r = length (rangeToList r) == n
+  | otherwise = True
+
 spec :: Spec
 spec = do
   describe "range membership check" $ do
@@ -76,6 +90,18 @@ spec = do
     it "Word8" (property (allInRange @Word8))
     it "Word16" (property (allInRange @Word16))
     it "Char" (property (allInRange @Char))
+  describe "rangeLength" $ do
+    it "Int8" (property (rangeLengthCheck @Int8))
+    it "Int16" (property (rangeLengthCheck @Int16))
+    it "Word8" (property (rangeLengthCheck @Word8))
+    it "Word16" (property (rangeLengthCheck @Word16))
+    it "Char" (property (rangeLengthCheck @Char))
+  describe "rangeLastValue" $ do
+    it "Int8" (property (lastValueTest @Int8))
+    it "Int16" (property (lastValueTest @Int16))
+    it "Word8" (property (lastValueTest @Word8))
+    it "Word16" (property (lastValueTest @Word16))
+    it "Char" (property (lastValueTest @Char))
   describe "range pattern checks" $ do
     describe "Int8" (rangepatCheck (Proxy :: Proxy Int8))
     describe "Int16" (rangepatCheck (Proxy :: Proxy Int16))

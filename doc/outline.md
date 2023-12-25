@@ -7,32 +7,56 @@ author: Willem Van Onsem
 
 Haskell aims to be a very concise language where repitive code is excluded as much as possible. There are however still cases where the same expression is used for different patterns. Indeed, for example if we want to specify the blocks for different elements:
 
-```
-data Element = H | He | Li | Be | B | C | N | O | F | Ne
-data Block = BlockS | BlockP | BlockD | BlockF
+...
 
-block :: Element -> Block
-block H = BlockS
-block He = BlockS
-block Li = BlockS
-block Be = BlockS
-block B = BlockP
-block C = BlockP
-block N = BlockP
-block O = BlockP
-block F = BlockP
-block Ne = BlockP
+A popular programming task is *FizzBuzz*, where one enters a number, and the program prints all numbers up to that number. If the item is however dividable by three, it prints `Fizz`, if it is dividable by five, it prints `Buzz`, and if it is dividable both by three and five, it prints `FizzBuzz`. We can implement this in Haskell with:
+
+```
+fizzBuzz :: Int -> String
+fizzBuzz n
+  | n `mod` 15 = "FizzBuzz"
+  | n `mod` 3 = "Fizz"
+  | n `mod` 5 = "Buzz"
+  | otherwise = show n
 ```
 
-here several lines of code have most elements in common. A simple way to improve this is with guards that perform range checks, like:
+this however introduces extra syntax: we now have a variable named `n` for example, that is linked
 
-block :: Element -> Block
-block e
-  | H <= e && e <= Be = BlockS
-  | B <= e && e <= Ne = BlockP
+In this paper, we discuss a few `QuasiQuoter`s that can make functions shorter, or at least the code more self-explaining. For example `rangepat` can work with a specified *range* and allows us to define the *FizzBuzz* solution as:
+
+```
+fizzBuzz :: Int -> String
+fizzBuzz [rangepat|0, 15 ..|] = "FizzBuzz"
+fizzBuzz [rangepat|0, 3 ..|] = "Fizz"
+fizzBuzz [rangepat|0, 5 ..|] = "Buzz"
+fizzBuzz n = show n
 ```
 
-this however introduces extra syntax: we now have a variable named `e` for example we do not per se need in the body of the functions. 
+but it is still not completely straightforward, since we have to do the math that the intersection of the two ranges `[0, 3 ..]` and `[0, 5 ..]` is `[0, 15 ..]`, we can simplify this further to:
+
+```
+fizzBuzz :: Int -> String
+fizzBuzz [rangepat|[0, 3 ..] <> [0, 5 ..]|] = "FizzBuzz"
+fizzBuzz [rangepat|0, 3 ..|] = "Fizz"
+fizzBuzz [rangepat|0, 5 ..|] = "Buzz"
+fizzBuzz n = show n
+```
+
+or:
+
+```
+three :: RangeObj Int
+three = [rangepat|0, 3 ..|]
+
+five :: RangeObj Int
+five = [rangepat|0, 3 ..|]
+
+fizzBuzz :: Int -> String
+fizzBuzz [rangepat|three <> five|] = "FizzBuzz"
+fizzBuzz [rangepat|three|] = "Fizz"
+fizzBuzz [rangepat|five|] = "Buzz"
+fizzBuzz n = show n
+```
 
 # View patterns and quasi quoters
 
@@ -54,8 +78,12 @@ This thus means that a range object `RangeFromThenTo 1 3 10` is "richer" than a 
 
 ## Membership checks
 
-A simple
+
 
 ## Floating points and other caveats
 
-Haskell's `Enum` instances have some caveats though. 
+Haskell's `Enum` instances have some caveats though, and therefore `rangepat` can have unwanted or at least unexpected behavior. One if the problems is that `fromEnum` maps to `Int`, this means that the function is guaranteed not to be *injective* for certain types: the number of values the range spans over, is larger than the `Int`. Indeed, for example `Integer` can store any possible integral value[^1], whereas `Int` is on most systems a 32-bit integer or 64-bit integer. This means that there are two (different) `Integer` values that map on the same `Int` value with `fromEnum`. This thus means that for these two values, the `RangeObj` will not make a difference in membership check, this might not be a problem for *some* `RangeObj` objects, but very likely for others it will. For `Float` and `Double` this is very clear since `fromEnum 1.2` and `fromEnum 1.5` for example all map to one, and it thus acts as a `truncate`.
+
+For floating point numbers, there are more severe problems. A range object assumes that the values are *equidistant*, indeed `[a, a+b ..]` includes all values $$a + n\cdot{} b$$ with $n$ a natural number (including zero), but floating points do not define values in an equidistant manner: eventually the exponent increases and so floating point values become scarser (???) as the value increases. Eventually this means that a range for `[1 ..]` will not contain all integral numbers, since there are no floating point values to represent these numbers, and therefore the `[1 ..]`.
+
+[^1] Unless the integral value can no longer be stored in the available memory.

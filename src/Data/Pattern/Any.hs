@@ -385,11 +385,11 @@ maypat ::
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
 
 _makeTupleExpressions :: Name -> [Pat] -> Q ([Maybe Exp], [Pat])
-_makeTupleExpressions hm = go
+_makeTupleExpressions hm = go [] [] . reverse
   where
-    go [] = pure ([], [])
-    go (ViewP e p : xs) = (\(es, ps) -> (Just (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm) : es, conP 'Just [p] : ps)) <$> go xs
-    go _ = fail "all items in the hashpat should look like view patterns."
+    go es ps [] = pure (es, ps)
+    go es ps (ViewP e p : xs) = go (Just (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm) : es) (conP 'Just [p] : ps) xs
+    go _ _ _ = fail "all items in the hashpat should look like view patterns."
 
 -- | Create a view pattern that maps a HashMap with a locally scoped @hm@ parameter to a the patterns. It thus basically implicitly adds `lookup`
 -- to all expressions and matches these with the given patterns. The compilation fails if not all elements are view patterns.
@@ -401,7 +401,7 @@ combineHashViewPats ::
 combineHashViewPats (ViewP e p :| []) = pure (ViewP (AppE (VarE 'Data.HashMap.Strict.lookup) e) (conP 'Just [p]))
 combineHashViewPats (x :| xs) = do
   hm <- newName "hm"
-  (\(es, ps) -> ViewP (LamE [VarP hm] (TupE es)) (TupP ps)) <$> _makeTupleExpressions hm (x : xs)
+  uncurry ((. TupP) . (ViewP . LamE [VarP hm] . TupE)) <$> _makeTupleExpressions hm (x : xs)
 
 -- | A quasiquoter to make `Data.HashMap.Strict.HashMap` lookups more convenient. This can only be used as a pattern.
 hashpat :: QuasiQuoter

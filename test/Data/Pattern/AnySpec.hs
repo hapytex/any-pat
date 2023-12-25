@@ -1,15 +1,15 @@
 {-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 module Data.Pattern.AnySpec where
 
 import Data.Bool (bool)
 import Data.Int (Int16, Int8)
-import Data.Pattern.Any (RangeObj, pattern FromRange, pattern FromThenRange, pattern FromThenToRange, pattern FromToRange, inRange, rangeToList, rangepat, rangeLength, rangeLastValue)
+import Data.Pattern.Any (RangeObj, inRange, rangeLastValue, rangeLength, rangeToList, rangepat, pattern FromRange, pattern FromThenRange, pattern FromThenToRange, pattern FromToRange)
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word16, Word8)
 import Test.Hspec (describe, it)
@@ -42,7 +42,8 @@ allInRange r = all (inRange r) (limitRangeList r)
 
 intersectRange :: (Enum a, Eq a) => RangeObj a -> RangeObj a -> Bool
 intersectRange r1 r2 = all (\x -> inRange rr x == inRange r2 x) (limitRangeList r1)
-  where rr = r1 <> r2
+  where
+    rr = r1 <> r2
 
 intersectRange2 :: (Enum a, Eq a) => RangeObj a -> RangeObj a -> a -> Bool
 intersectRange2 r1 r2 x = inRange (r1 <> r2) x == (inRange r1 x && inRange r2 x)

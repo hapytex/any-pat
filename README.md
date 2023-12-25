@@ -53,9 +53,13 @@ mightBe = [maypat|(0, a _), (1, _, a), _|]
 
 If it is used as pattern, the `ViewPatterns` language extension should be enabled. Furthermore the `QuasiQuotes` extension should of course be enabled for any use of the quasi quoters.
 
-The difference between the two `QuasiQuoter`s (`anypat` and `maypat`) are the handling of variable names. Variable names defined in the pattern(s) are used in the body of the function, so it makes sense that if the clause "fires", these have a value. This thus means that a reasonable condition is that all patterns have the same set of variable names and that the variable names have the same type. The `anypat` requires that all patterns have the same variables, so `[anypat|(0, a), (1, _)|]` will raise an error: if the second pattern `(1, _)` would "fire" it would not provide a value for the `a` variable, and then we have a problem. A possible solution would be to pass a value like `undefined`, or an infinite loop (i.e. `y = let x = x in x` for example) as value, but this looks like something that would only cause a lot of trouble.
+The difference between the two QuasiQuoters (`anypat` and `maypat`) is in how they handle variable names. Variable names defined in the patterns are used in the body of the function, so it makes sense that if the clause "fires", they have a value. This means that a reasonable condition is that all patterns have the same set of variable names and that the variable names have the same type.
 
-Therefore `maypat` comes with a different solution: it performs analysis on the variables used in the different patterns. Variables that occur in all patterns are just passed with the real value, variables that occur only in a (strict) subset of the listed patterns, are passed as a `Maybe a` value with `Just x` in case the first pattern that "fires" (left-to-right) for the value has that variable, it will be wrapped in a `Just`, and otherwise, it will pass `Nothing` as that variable.
+The `anypat` requires that all patterns have the same variables. So, `[anypat|(0, a), (1, _)|]` will raise an error *at compile time*. This is because if the second pattern `(1, _)` "fires", it will not provide a value for the a variable. This is a problem, because the body of the function expects a value for the a variable.
+
+One possible solution would be to pass a value like `undefined` or an infinite loop (i.e. `y = let x = x in x` for example) as the value for the a variable. However, this is not a good solution, because it would cause a lot of trouble.
+
+Therefore, `maypat` comes with a different solution. It performs analysis on the variables used in the different patterns. Variables that occur in all patterns are simply passed with the real value. Variables that occur only in a (strict) subset of the listed patterns are passed as a `Maybe a` value. If the first pattern that "fires" (left-to-right) for the value has that variable, it will be wrapped in a `Just`. Otherwise, it will pass `Nothing` as that variable.
 
 Some functions in the `base` package, for example, have a simple equivalent with `anypat` or `maypat`, for example [**`listToMaybe ∷ [a] → Maybe a`**](https://hackage.haskell.org/package/base-4.18.0.0/docs/Data-Maybe.html#v:listToMaybe) can be implemented as:
 
@@ -96,6 +100,9 @@ Essentially it thus compiles the pattern, which is a sequence of view patterns i
 `rangepat` defines patterns for range memberships. For example:
 
 ```
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ViewPatterns #-}
+
 isInRange ∷ Int → Bool
 isInRange [rangepat|0, 5 .. 50|] = True
 isInRange _ = False
@@ -114,7 +121,7 @@ The package transforms a sequence of patterns to a *view pattern*, or an *expres
 <pre><code>\case
   p<sub>1</sub> &rarr; Just n&#8407;
   p<sub>2</sub> &rarr; Just n&#8407;
-  &vellip;   &vellip;      &vellip;
+  &vellip;   &vellip;    &vellip;
   p<sub>n</sub> &rarr; Just n&#8407;
   _ &rarr; Nothing</code></pre>
 
@@ -124,7 +131,7 @@ There are some (small) optimizations that for example are used if no variable na
 
 For `rangepat`, it first converts the range to a `RangeObj`, and then checks membership in constant time (given we assume that operations on `Int` run in constant time).
 
-## `any-pat` is **inferred** *safe* Haskell
+## `any-pat` is ***inferred** safe* Haskell
 
 It can not be marked safe, since the modules it depends on are not marked safe, but its safeness can be inferred by the compiler.
 
@@ -136,3 +143,6 @@ repository*](https://github.com/hapytex/any-pat).
 You can contact the package maintainer by sending a mail to
 [`hapytexeu+gh@gmail.com`](mailto:hapytexeu+gh@gmail.com).
 
+---
+
+This package is dedicated to professor <abbr title="for the Pat-rick of course.">**P̲a̲t̲**rick</abbr> De Causmaecker, who taught most of the basic programming courses at university, not Haskell however.

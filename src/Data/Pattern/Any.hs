@@ -314,12 +314,21 @@ maypat ::
   QuasiQuoter
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
 
+#if MIN_VERSION_template_haskell(2, 16, 0)
 _makeTupleExpressions :: Name -> [Pat] -> Q ([Maybe Exp], [Pat])
 _makeTupleExpressions hm = go [] [] . reverse
   where
     go es ps [] = pure (es, ps)
     go es ps (ViewP e p : xs) = go (Just (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm) : es) (conP 'Just [p] : ps) xs
     go _ _ _ = fail "all items in the hashpat should look like view patterns."
+#else
+_makeTupleExpressions :: Name -> [Pat] -> Q ([Exp], [Pat])
+_makeTupleExpressions hm = go [] [] . reverse
+  where
+    go es ps [] = pure (es, ps)
+    go es ps (ViewP e p : xs) = go (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm : es) (conP 'Just [p] : ps) xs
+    go _ _ _ = fail "all items in the hashpat should look like view patterns."
+#endif
 
 -- | Create a view pattern that maps a HashMap with a locally scoped @hm@ parameter to a the patterns. It thus basically implicitly adds `lookup`
 -- to all expressions and matches these with the given patterns. The compilation fails if not all elements are view patterns.

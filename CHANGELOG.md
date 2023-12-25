@@ -8,6 +8,10 @@ and this project adheres to the
 
 For a full list of changes, see the history on [*GitHub*](https://github.com/hapytex/any-pat).
 
+## 0.3.0.0 - 2023-12-25
+
+Added `hashpat` to perform `HashMap` lookups.
+
 ## 0.2.0.0 - 2023-07-30
 
 Added `rangepat` to pattern match on ranges.

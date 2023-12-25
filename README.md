@@ -90,9 +90,7 @@ bifanothing [hashpat|"a" ++ "b" -> Nothing, "b" -> Just x|] = x
 bifanothing _ = 0
 ```
 
-this will thus fire the first clause if the `HashMap` has a key `"ab"` that maps to `Nothing`, and a key `"b"` that maps to a `Just x`, and in that case return the `x`.
-
-Essentially it thus compiles the pattern, which is a sequence of view patterns into a function that 
+this will thus fire the first clause if the `HashMap` has a key `"ab"` that maps to `Nothing`, and a key `"b"` that maps to a `Just x`, and in that case return the `x`. Essentially it thus compiles the pattern, which is a sequence of view patterns into a function that will perform `lookup`s and then pattern match on the result of these lookups.
 
 
 ### `rangepat`

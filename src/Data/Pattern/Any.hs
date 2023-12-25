@@ -37,7 +37,9 @@ module Data.Pattern.Any
     pattern FromToRange,
     pattern FromThenToRange,
     rangeToList,
-    inRange, (∈), (∋),
+    inRange,
+    (∈),
+    (∋),
     rangeLength,
     rangeDirection,
     rangeLastValue,
@@ -49,11 +51,11 @@ import Control.Monad ((>=>))
 # if !MIN_VERSION_base(4,13,0)
 import Control.Monad.Fail (MonadFail)
 #endif
-import Data.HashMap.Strict(lookup)
+import Data.HashMap.Strict (lookup)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Language.Haskell.Exts.Extension (Extension(EnableExtension), KnownExtension(ViewPatterns))
-import Language.Haskell.Exts.Parser (ParseMode(extensions), ParseResult (ParseFailed, ParseOk), parseExp, parsePatWithMode, defaultParseMode)
+import Language.Haskell.Exts.Extension (Extension (EnableExtension), KnownExtension (ViewPatterns))
+import Language.Haskell.Exts.Parser (ParseMode (extensions), ParseResult (ParseFailed, ParseOk), defaultParseMode, parseExp, parsePatWithMode)
 import Language.Haskell.Meta (toExp, toPat)
 import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, LamE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR), newName)
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
@@ -87,26 +89,29 @@ rangeLastValue :: Enum a => RangeObj a -> Maybe a
 rangeLastValue (RangeObj b Nothing e@(Just e'))
   | fromEnum b <= fromEnum e' = e
 rangeLastValue (RangeObj b' jt@(Just t') (Just e'))
-  | EQ <- c, e >= b = jt  -- we reuse the item in the 'RangeObj' to save memory
+  | EQ <- c, e >= b = jt -- we reuse the item in the 'RangeObj' to save memory
   | LT <- c, b < e = Just (toEnum (e - ((e - b) `mod` d)))
   | GT <- c, b > e = Just (toEnum (e - ((e - b) `mod` d)))
-  where c = compare b t
-        b = fromEnum b'
-        t = fromEnum t'
-        e = fromEnum e'
-        d = t - b
+  where
+    c = compare b t
+    b = fromEnum b'
+    t = fromEnum t'
+    e = fromEnum e'
+    d = t - b
 rangeLastValue _ = Nothing
 
 _fMaybe :: (a -> a -> a) -> Maybe a -> Maybe a -> Maybe a
 _fMaybe f = go
-  where go (Just x) (Just y) = Just (f x y)
-        go Nothing x = x
-        go x _ = x
+  where
+    go (Just x) (Just y) = Just (f x y)
+    go Nothing x = x
+    go x _ = x
 
 _sMaybe :: (a -> a -> a) -> a -> Maybe a -> a
 _sMaybe f = go
-  where go x Nothing = x
-        go x (Just y) = f x y
+  where
+    go x Nothing = x
+    go x (Just y) = f x y
 
 _nextdd :: Maybe Int -> Int -> Int -> Int
 _nextdd Nothing m1 m2 = max m1 m2
@@ -119,7 +124,8 @@ _subd (RangeObj b t _) = subtract b <$> t
 
 _gcd' 0 b = (b, 0, 1)
 _gcd' a b = (g, t - (b `div` a) * s, s)
-  where (g, s, t) = _gcd' (b `mod` a) a
+  where
+    (g, s, t) = _gcd' (b `mod` a) a
 
 _mergers :: Ordering -> (Int -> Int -> Int, Int -> Int -> Int, Int -> Int -> Int)
 _mergers LT = (max, (+), min)
@@ -128,9 +134,10 @@ _mergers GT = (min, (+), max)
 
 _sameDirMerge :: RangeObj Int -> RangeObj Int -> Ordering -> RangeObj Int
 _sameDirMerge r1@(RangeObj b1 t1 e1) r2@(RangeObj b2 t2 e2) o = RangeObj d0 ((d0 +) <$> dd) (_fMaybe m2 e1 e2)
-  where ~(m1, _, m2) = _mergers o
-        dd = _fMaybe (\x -> (*) (signum x) . lcm x) (_subd r1) (_subd r2)
-        d0 = m1 b1 b2
+  where
+    ~(m1, _, m2) = _mergers o
+    dd = _fMaybe (\x -> (*) (signum x) . lcm x) (_subd r1) (_subd r2)
+    d0 = m1 b1 b2
 
 _singleRange :: RangeObj Int -> Maybe Int
 _singleRange (RangeObj b _ Nothing) = Just b
@@ -145,21 +152,23 @@ _withEqMerge r1@(RangeObj b1 _ e1) r2@(RangeObj b2 _ _)
 
 _difDirMerge :: RangeObj Int -> RangeObj Int -> Ordering -> RangeObj Int
 _difDirMerge r1@(RangeObj b1 t1 e1) r2@(RangeObj b2 t2 e2) _ord = undefined
-  {-_sameDirMerge r1 (RangeObj (_sMaybe ) e2 (Just b1))  -- important to preserve the hops of the second range
-  where l1 = rangeLastValue r1
-        l2 = rangeLastValue r2
-        ~(m1, _, m2) = _mergers _ord -}
+
+{-_sameDirMerge r1 (RangeObj (_sMaybe ) e2 (Just b1))  -- important to preserve the hops of the second range
+where l1 = rangeLastValue r1
+      l2 = rangeLastValue r2
+      ~(m1, _, m2) = _mergers _ord -}
 
 instance Enum a => Semigroup (RangeObj a) where
   ro1 <> ro2 = toEnum <$> (go (fromEnum <$> ro1) (fromEnum <$> ro2))
-    where go r1 r2
-            | _dir1 == _dir2 = _sameDirMerge r1 r2 _dir1
-            | EQ <- _dir1 = _withEqMerge r2 r1
-            | EQ <- _dir2 = _withEqMerge r1 r2
-            | otherwise = _difDirMerge r1 r2 _dir1
-            where _dir1 = rangeDirection r1
-                  _dir2 = rangeDirection r2
-
+    where
+      go r1 r2
+        | _dir1 == _dir2 = _sameDirMerge r1 r2 _dir1
+        | EQ <- _dir1 = _withEqMerge r2 r1
+        | EQ <- _dir2 = _withEqMerge r1 r2
+        | otherwise = _difDirMerge r1 r2 _dir1
+        where
+          _dir1 = rangeDirection r1
+          _dir2 = rangeDirection r2
 
 -- | Convert the 'RangeObj' to a list of the values defined by the range.
 rangeToList ::
@@ -307,7 +316,7 @@ unionCaseExp :: MonadFail m => Bool -> NonEmpty Pat -> m Exp
 unionCaseExp = unionCaseFuncWith fst
 
 parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
-parsePatternSequence s = parsePatWithMode (defaultParseMode { extensions=[EnableExtension ViewPatterns] }) ('(' : s ++ ")") >>= _getPats . toPat
+parsePatternSequence s = parsePatWithMode (defaultParseMode {extensions = [EnableExtension ViewPatterns]}) ('(' : s ++ ")") >>= _getPats . toPat
 
 #if MIN_VERSION_template_haskell(2,18,0)
 _getPats :: Pat -> ParseResult (NonEmpty Pat)
@@ -377,19 +386,22 @@ maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) 
 
 _makeTupleExpressions :: Name -> [Pat] -> Q ([Maybe Exp], [Pat])
 _makeTupleExpressions hm = go
-  where go [] = pure ([], [])
-        go (ViewP e p:xs) = (\(es, ps) -> (Just (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm) : es, conP 'Just [p] : ps)) <$> go xs
-        go _ = fail "all items in the hashpat should look like view patterns."
+  where
+    go [] = pure ([], [])
+    go (ViewP e p : xs) = (\(es, ps) -> (Just (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm) : es, conP 'Just [p] : ps)) <$> go xs
+    go _ = fail "all items in the hashpat should look like view patterns."
 
 -- | Create a view pattern that maps a HashMap with a locally scoped @hm@ parameter to a the patterns. It thus basically implicitly adds `lookup`
 -- to all expressions and matches these with the given patterns. The compilation fails if not all elements are view patterns.
-combineHashViewPats
-  :: NonEmpty Pat -- ^ The non-empty list of view patterns that are compiled into a viw pattern.
-  -> Q Pat  -- ^ A 'Pat' that is a view pattern that will map a 'Data.HashMap.Strict.HashMap' to make lookups and matches these with the given patterns.
+combineHashViewPats ::
+  -- | The non-empty list of view patterns that are compiled into a viw pattern.
+  NonEmpty Pat ->
+  -- | A 'Pat' that is a view pattern that will map a 'Data.HashMap.Strict.HashMap' to make lookups and matches these with the given patterns.
+  Q Pat
 combineHashViewPats (ViewP e p :| []) = pure (ViewP (AppE (VarE 'Data.HashMap.Strict.lookup) e) (conP 'Just [p]))
 combineHashViewPats (x :| xs) = do
   hm <- newName "hm"
-  (\(es, ps) -> ViewP (LamE [VarP hm] (TupE es)) (TupP ps)) <$> _makeTupleExpressions hm (x:xs)
+  (\(es, ps) -> ViewP (LamE [VarP hm] (TupE es)) (TupP ps)) <$> _makeTupleExpressions hm (x : xs)
 
 -- | A quasiquoter to make `Data.HashMap.Strict.HashMap` lookups more convenient. This can only be used as a pattern.
 hashpat :: QuasiQuoter
@@ -464,7 +476,8 @@ inRange r' = go (fromEnum <$> r') . fromEnum
       | otherwise = _both (rangeCheck r (rangeDirection r)) (_modCheck b t)
 
 -- | Flipped alias of 'inRange' that checks if an element is in range of a given 'RangeObj'.
-(∈) :: Enum a =>
+(∈) ::
+  Enum a =>
   -- | The given element to check membership for.
   a ->
   -- | The 'RangeObj' object for which we check membership.
@@ -474,7 +487,8 @@ inRange r' = go (fromEnum <$> r') . fromEnum
 (∈) = flip inRange
 
 -- | Alias of 'inRange' that checks if an element is in range of a given 'RangeObj'.
-(∋) :: Enum a =>
+(∋) ::
+  Enum a =>
   -- | The 'RangeObj' object for which we check membership.
   RangeObj a ->
   -- | The given element to check membership for.

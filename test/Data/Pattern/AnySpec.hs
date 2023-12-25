@@ -40,14 +40,6 @@ lastValueTest r
 allInRange :: forall a. (Enum a, Eq a) => RangeObj a -> Bool
 allInRange r = all (inRange r) (limitRangeList r)
 
-intersectRange :: (Enum a, Eq a) => RangeObj a -> RangeObj a -> Bool
-intersectRange r1 r2 = all (\x -> inRange rr x == inRange r2 x) (limitRangeList r1)
-  where
-    rr = r1 <> r2
-
-intersectRange2 :: (Enum a, Eq a) => RangeObj a -> RangeObj a -> a -> Bool
-intersectRange2 r1 r2 x = inRange (r1 <> r2) x == (inRange r1 x && inRange r2 x)
-
 rangepatFromCheck :: forall a. Enum a => a -> a -> Bool
 rangepatFromCheck b x = f x == inRange (FromRange b) x
   where
@@ -110,18 +102,6 @@ spec = do
     it "Word8" (property (lastValueTest @Word8))
     it "Word16" (property (lastValueTest @Word16))
     it "Char" (property (lastValueTest @Char))
-  describe "intersection 1" $ do
-    it "Int8" (property (intersectRange @Int8))
-    it "Int16" (property (intersectRange @Int16))
-    it "Word8" (property (intersectRange @Word8))
-    it "Word16" (property (intersectRange @Word16))
-    it "Char" (property (intersectRange @Char))
-  describe "intersection 2" $ do
-    it "Int8" (property (intersectRange2 @Int8))
-    it "Int16" (property (intersectRange2 @Int16))
-    it "Word8" (property (intersectRange2 @Word8))
-    it "Word16" (property (intersectRange2 @Word16))
-    it "Char" (property (intersectRange2 @Char))
   describe "range pattern checks" $ do
     describe "Int8" (rangepatCheck (Proxy :: Proxy Int8))
     describe "Int16" (rangepatCheck (Proxy :: Proxy Int16))

@@ -66,6 +66,31 @@ listToMaybe ∷ [a] → Maybe a
 listToMaybe = [maypat|(a:_), _|]
 ```
 
+### `hashpat`
+
+`hashpat` is a quasi quoter for patterns to make lookups on `HashMap`s more convenient. Indeed, we can for example create a function:
+
+```
+sumab :: HashMap String Int -> Int
+sumab [hashpat|"a" -> a, "b" -> b|] = a + b
+sumab _ = 0
+```
+
+this will "fire" the first clause given the `HashMap` has both an `"a"` and `"b"` as key, and it will thus perform the corresponding lookups and unify `a` and `b` with the corresponding output. This thus means that a `HashMap` that contains `"a"` and `"b"`, we will sum up the values for that `HashMap`, and if not return `0`.
+
+The keys can take arbitrary expressions, and we thus can for example use `"a" ++ "b"` as key. Furthermore we can use an arbitrary pattern at the right side of the arrow, such that it only "fires" if it matches a given pattern. For example:
+
+```
+bifanothing :: HashMap String (Maybe Int) -> Int
+bifanothing [hashpat|"a" ++ "b" -> Nothing, "b" -> Just x|] = x
+bifanothing _ = 0
+```
+
+this will thus fire the first clause if the `HashMap` has a key `"ab"` that maps to `Nothing`, and a key `"b"` that maps to a `Just x`, and in that case return the `x`.
+
+Essentially it thus compiles the pattern, which is a sequence of view patterns into a function that 
+
+
 ### `rangepat`
 
 `rangepat` defines patterns for range memberships. For example:

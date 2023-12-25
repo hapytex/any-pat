@@ -24,7 +24,7 @@ module Data.Pattern.Any
     ϵ,
 
     -- * compile hash patterns
-    combineHashViewPats
+    combineHashViewPats,
 
     -- * derive variable names names from patterns
     patVars,
@@ -247,7 +247,7 @@ conP = ConP
 bodyPat :: Bool -> [Name] -> (Exp, Pat)
 bodyPat _ [] = (ConE 'False, conP 'True [])
 bodyPat b [n] = (ConE 'Nothing, wrapIt (conP 'Just . pure) b (VarP n))
-bodyPat b ns = (ConE 'Nothing, wrapIt (conP 'Just . pure) b (TildeP (TupP (map VarP ns))))
+bodyPat b ns = (ConE 'Nothing, wrapIt (conP 'Just . pure) b (TupP (map VarP ns)))
 
 transName' :: HowPass -> Name -> Exp
 transName' Simple = VarE
@@ -390,7 +390,6 @@ combineHashViewPats (ViewP e p :| []) = pure (ViewP (AppE (VarE 'Data.HashMap.St
 combineHashViewPats (x :| xs) = do
   hm <- newName "hm"
   (\(es, ps) -> ViewP (LamE [VarP hm] (TupE es)) (TupP ps)) <$> _makeTupleExpressions hm (x:xs)
-combineHashViewPats _ = fail "all items in the hashpat should look like view patterns."
 
 -- | A quasiquoter to make `Data.HashMap.Strict.HashMap` lookups more convenient. This can only be used as a pattern.
 hashpat :: QuasiQuoter

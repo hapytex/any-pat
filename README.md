@@ -75,8 +75,8 @@ listToMaybe = [maypat|(a:_), _|]
 `hashpat` is a quasi quoter for patterns to make lookups on `HashMap`s more convenient. Indeed, we can for example create a function:
 
 ```
-sumab :: HashMap String Int -> Int
-sumab [hashpat|"a" -> a, "b" -> b|] = a + b
+sumab ∷ HashMap String Int → Int
+sumab [hashpat|"a" → a, "b" → b|] = a + b
 sumab _ = 0
 ```
 
@@ -85,8 +85,8 @@ this will "fire" the first clause given the `HashMap` has both an `"a"` and `"b"
 The keys can take arbitrary expressions, and we thus can for example use `"a" ++ "b"` as key. Furthermore we can use an arbitrary pattern at the right side of the arrow, such that it only "fires" if it matches a given pattern. For example:
 
 ```
-bifanothing :: HashMap String (Maybe Int) -> Int
-bifanothing [hashpat|"a" ++ "b" -> Nothing, "b" -> Just x|] = x
+bifanothing ∷ HashMap String (Maybe Int) → Int
+bifanothing [hashpat|"a" ++ "b" → Nothing, "b" → Just x|] = x
 bifanothing _ = 0
 ```
 

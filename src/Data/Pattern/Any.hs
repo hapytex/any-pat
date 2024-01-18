@@ -57,7 +57,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Language.Haskell.Exts.Extension (Extension (EnableExtension), KnownExtension (ViewPatterns))
 import Language.Haskell.Exts.Parser (ParseMode (extensions), ParseResult (ParseFailed, ParseOk), defaultParseMode, parseExp, parsePatWithMode)
 import Language.Haskell.Meta (toExp, toPat)
-import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, LamE, LitE, TupE, VarE), Lit(StringL), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR), newName, nameBase)
+import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, LamE, LitE, TupE, VarE), Lit (StringL), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR), nameBase, newName)
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
@@ -344,7 +344,7 @@ _makeTupleExpressions :: [Pat] -> Q ([Exp], [Pat])
 _makeTupleExpressions = go [] [] . reverse
   where
     go es ps [] = pure (es, ps)
-    go es ps (p@(VarP n) : xs) = go es ps (ViewP (LitE (StringL (nameBase n))) p:xs)
+    go es ps (p@(VarP n) : xs) = go es ps (ViewP (LitE (StringL (nameBase n))) p : xs)
     go es ps (ViewP e p : xs) = go (VarE 'Data.HashMap.Strict.lookup `AppE` e : es) (conP 'Just [p] : ps) xs
     go _ _ _ = fail "all items in the hashpat should look like view patterns or simple variables."
 
@@ -386,7 +386,6 @@ combineHashViewPats (x :| xs) = do
 -- @
 --
 -- This will sum up the values for `"a"` and `"b"` in the 'Data.HashMap.Strict.HashMap', given these /both/ exist. Otherwise, it returns `0`.
-
 hashpat :: QuasiQuoter
 hashpat = QuasiQuoter failQ ((liftFail >=> combineHashViewPats) . parsePatternSequence) failQ failQ
 
@@ -516,7 +515,6 @@ rangepat = QuasiQuoter (parsefun id) (parsefun ((`ViewP` conP 'True []) . (VarE 
 -- positiveEven [ϵ|2, 4 ..|] = True
 -- positiveEven _ = False
 -- @
-
 ϵ ::
   -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter

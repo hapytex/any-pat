@@ -246,7 +246,7 @@ unionCaseExp :: MonadFail m => Bool -> NonEmpty Pat -> m Exp
 unionCaseExp = unionCaseFuncWith fst
 
 parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
-parsePatternSequence s = parsePatWithMode (defaultParseMode {extensions = map EnableExtension [ViewPatterns]}) ('(' : s ++ ")") >>= _getPats . toPat
+parsePatternSequence s = parsePatWithMode (defaultParseMode {extensions = [EnableExtension ViewPatterns]}) ('(' : s ++ ")") >>= _getPats . toPat
 
 #if MIN_VERSION_template_haskell(2,18,0)
 _getPats :: Pat -> ParseResult (NonEmpty Pat)

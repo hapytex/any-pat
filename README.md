@@ -92,6 +92,17 @@ bifanothing _ = 0
 
 this will thus fire the first clause if the `HashMap` has a key `"ab"` that maps to `Nothing`, and a key `"b"` that maps to a `Just x`, and in that case return the `x`. Essentially it thus compiles the pattern, which is a sequence of view patterns into a function that will perform `lookup`s and then pattern match on the result of these lookups.
 
+Since `HashMap`s with strings as keys are common, and unpacking these into variables with the same name is a common usecase, one can also just list variable names. These will then be translated into lookups with strings, or if the `OverloadedStrings` extension is enabled, a `HashMap` where the key type is both a member of `Hashable` and `IsString`:
+
+```
+{-# LANGUAGE OverloadedStrings, QuasiQuotes, ViewPatterns #-}
+
+sumab :: (Hashable s, IsString s, Num n) => HashMap s n -> n
+sumab [hashpat|a, b|] = a + b
+sumab _ = 0
+```
+
+this thus makes it possible to handle optional named paramters, although these all have to have the same type of corresponding values. The dictionary can thus to some extend ???
 
 ### `rangepat`
 

@@ -57,7 +57,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Language.Haskell.Exts.Extension (Extension (EnableExtension), KnownExtension (ViewPatterns))
 import Language.Haskell.Exts.Parser (ParseMode (extensions), ParseResult (ParseFailed, ParseOk), defaultParseMode, parseExp, parsePatWithMode)
 import Language.Haskell.Meta (toExp, toPat)
-import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, LamE, TupE, VarE), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR), newName)
+import Language.Haskell.TH (Body (NormalB), Exp (AppE, ArithSeqE, ConE, LamCaseE, LamE, LitE, TupE, VarE), Lit(StringL), Match (Match), Name, Pat (AsP, BangP, ConP, InfixP, ListP, LitP, ParensP, RecP, SigP, TildeP, TupP, UInfixP, UnboxedSumP, UnboxedTupP, VarP, ViewP, WildP), Q, Range (FromR, FromThenR, FromThenToR, FromToR), newName, nameBase)
 import Language.Haskell.TH.Quote (QuasiQuoter (QuasiQuoter))
 
 data HowPass = Simple | AsJust | AsNothing deriving (Eq, Ord, Read, Show)
@@ -246,7 +246,7 @@ unionCaseExp :: MonadFail m => Bool -> NonEmpty Pat -> m Exp
 unionCaseExp = unionCaseFuncWith fst
 
 parsePatternSequence :: String -> ParseResult (NonEmpty Pat)
-parsePatternSequence s = parsePatWithMode (defaultParseMode {extensions = [EnableExtension ViewPatterns]}) ('(' : s ++ ")") >>= _getPats . toPat
+parsePatternSequence s = parsePatWithMode (defaultParseMode {extensions = map EnableExtension [ViewPatterns]}) ('(' : s ++ ")") >>= _getPats . toPat
 
 #if MIN_VERSION_template_haskell(2,18,0)
 _getPats :: Pat -> ParseResult (NonEmpty Pat)
@@ -301,6 +301,15 @@ rangeObjToExp (RangeObj b t e) = ConE 'RangeObj `AppE` b `AppE` go t `AppE` go e
 
 -- | A quasquoter to specify multiple patterns that will succeed if any of the patterns match. All patterns should have the same set of variables and these should
 -- have the same type, otherwise a variable would have two different types, and if a variable is absent in one of the patterns, the question is what to pass as value.
+--
+-- __Examples__:
+--
+-- @
+-- {-# LANGUAGE ViewPatterns, QuasiQuotes #-}
+--
+-- example :: (Bool, a, a) -> a
+-- example [anypat|(False, a, _), (True, _, a)|] = a
+-- @
 anypat ::
   -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
@@ -309,28 +318,37 @@ anypat = QuasiQuoter ((liftFail >=> unionCaseExp True) . parsePatternSequence) (
 -- | A quasiquoter to specify multiple patterns that will succeed if any of these patterns match. Patterns don't have to have the same variable names but if a variable is shared over the
 -- different patterns, it should have the same type. In case a variable name does not appear in all patterns, it will be passed as a 'Maybe' to the clause with 'Nothing' if a pattern matched
 -- without that variable name, and a 'Just' if the (first) pattern that matched had such variable.
+--
+-- __Examples__:
+--
+-- @
+-- {-# LANGUAGE ViewPatterns, QuasiQuotes #-}
+--
+-- example :: (Bool, a) -> Maybe a
+-- example [maypat|(True, a), _|] = a
+-- @
 maypat ::
   -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
 maypat = QuasiQuoter ((liftFail >=> unionCaseExp False) . parsePatternSequence) ((liftFail >=> unionCaseFunc False) . parsePatternSequence) failQ failQ
 
 #if MIN_VERSION_template_haskell(2, 16, 0)
-_makeTupleExpressions :: Name -> [Pat] -> Q ([Maybe Exp], [Pat])
-_makeTupleExpressions hm = go [] [] . reverse
-  where
-    go es ps [] = pure (es, ps)
-    go es ps (ViewP e p : xs) = go (Just (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm) : es) (conP 'Just [p] : ps) xs
-    go _ _ _ = fail "all items in the hashpat should look like view patterns."
+tupE :: [Exp] -> Exp
+tupE = TupE . map Just
 #else
-_makeTupleExpressions :: Name -> [Pat] -> Q ([Exp], [Pat])
-_makeTupleExpressions hm = go [] [] . reverse
-  where
-    go es ps [] = pure (es, ps)
-    go es ps (ViewP e p : xs) = go (VarE 'Data.HashMap.Strict.lookup `AppE` e `AppE` VarE hm : es) (conP 'Just [p] : ps) xs
-    go _ _ _ = fail "all items in the hashpat should look like view patterns."
+tupE :: [Exp] -> Exp
+tupE = TupE
 #endif
 
--- | Create a view pattern that maps a HashMap with a locally scoped @hm@ parameter to a the patterns. It thus basically implicitly adds `lookup`
+_makeTupleExpressions :: [Pat] -> Q ([Exp], [Pat])
+_makeTupleExpressions = go [] [] . reverse
+  where
+    go es ps [] = pure (es, ps)
+    go es ps (p@(VarP n) : xs) = go es ps (ViewP (LitE (StringL (nameBase n))) p:xs)
+    go es ps (ViewP e p : xs) = go (VarE 'Data.HashMap.Strict.lookup `AppE` e : es) (conP 'Just [p] : ps) xs
+    go _ _ _ = fail "all items in the hashpat should look like view patterns or simple variables."
+
+-- | Create a view pattern that maps a HashMap with a locally scoped @hm@ parameter to a the patterns. It thus basically implicitly adds 'Data.HashMap.Strict.lookup'
 -- to all expressions and matches these with the given patterns. The compilation fails if not all elements are view patterns.
 combineHashViewPats ::
   -- | The non-empty list of view patterns that are compiled into a viw pattern.
@@ -340,9 +358,35 @@ combineHashViewPats ::
 combineHashViewPats (ViewP e p :| []) = pure (ViewP (AppE (VarE 'Data.HashMap.Strict.lookup) e) (conP 'Just [p]))
 combineHashViewPats (x :| xs) = do
   hm <- newName "hm"
-  uncurry ((. TupP) . (ViewP . LamE [VarP hm] . TupE)) <$> _makeTupleExpressions hm (x : xs)
+  uncurry ((. TupP) . (ViewP . LamE [VarP hm] . tupE . map (`AppE` VarE hm))) <$> _makeTupleExpressions (x : xs)
 
--- | A quasiquoter to make `Data.HashMap.Strict.HashMap` lookups more convenient. This can only be used as a pattern.
+-- | A quasiquoter to make 'Data.HashMap.Strict.HashMap' lookups more convenient. This can only be used as a pattern. It takes a sequence of
+-- view patterns, where it will perform the lookup on the expression part of the view pattern, and match the /successful/ lookup with the pattern.
+-- The `Just` part is thus not used in the pattern part to indicate a successful lookup. If a single variable is used, it will make a lookup with
+-- a string literal with the same variable.
+--
+-- __Examples__:
+--
+-- @
+-- {-# LANGUAGE ViewPatterns, QuasiQuotes #-}
+--
+-- sumab :: HashMap String Int -> Int
+-- sumab [rangepat|"a" -> a, "b" -> b|] = a + b
+-- sumab _ = 0
+-- @
+--
+-- This will sum up the values for `"a"` and `"b"` in the 'Data.HashMap.Strict.HashMap', given these /both/ exist. Otherwise, it returns `0`.
+--
+-- @
+-- {-# LANGUAGE ViewPatterns, QuasiQuotes #-}
+--
+-- sumab :: HashMap String Int -> Int
+-- sumab [rangepat|a, b|] = a + b
+-- sumab _ = 0
+-- @
+--
+-- This will sum up the values for `"a"` and `"b"` in the 'Data.HashMap.Strict.HashMap', given these /both/ exist. Otherwise, it returns `0`.
+
 hashpat :: QuasiQuoter
 hashpat = QuasiQuoter failQ ((liftFail >=> combineHashViewPats) . parsePatternSequence) failQ failQ
 
@@ -441,6 +485,16 @@ _both f g x = f x && g x
 
 -- | A 'QuasiQuoter' to parse a range expression to a 'RangeObj'. In case the 'QuasiQuoter' is used for a pattern,
 -- it compiles into a /view pattern/ that will work if the element is a member of the 'RangeObj'.
+--
+-- __Examples__:
+--
+-- @
+-- {-# LANGUAGE ViewPatterns, QuasiQuotes #-}
+--
+-- positiveEven :: Int -> Bool
+-- positiveEven [rangepat|0, 2 ..|] = True
+-- positiveEven _ = False
+-- @
 rangepat ::
   -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
@@ -450,7 +504,19 @@ rangepat = QuasiQuoter (parsefun id) (parsefun ((`ViewP` conP 'True []) . (VarE 
 
 -- | An alias of the 'rangepat' 'QuasiQuoter', this is used since it looks quite similar to @∊ [a .. b]@,
 -- beware that the @ϵ@ in @[ϵ|a .. b|]@ is not an /element of/ character, but the /Greek lunate epsilon/ character
--- which only looks similar.
+-- which only /looks/ similar. The reason we use an epsiolon is because this can be used as an identifier, whereas
+-- the element of is an operator.
+--
+-- __Examples__:
+--
+-- @
+-- {-# LANGUAGE ViewPatterns, QuasiQuotes #-}
+--
+-- positiveEven :: Int -> Bool
+-- positiveEven [ϵ|2, 4 ..|] = True
+-- positiveEven _ = False
+-- @
+
 ϵ ::
   -- | The quasiquoter that can be used as expression and pattern.
   QuasiQuoter
